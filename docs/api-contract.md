@@ -1,0 +1,330 @@
+# TVCMall Customer MCP v0.1 API 契约
+
+本文定义 TVCMall Customer MCP v0.1 的本地 CLI、认证接口、token 策略、MCP tools、后端 API、scope、错误码和订单导出契约。
+
+## 1. 设计原则
+
+- MCP server 只使用已保存 token，不直接接收密码。
+- 登录、登出、查看当前账号等交互动作通过独立 CLI 完成。
+- MCP stdio 通道只承载 JSON-RPC 协议内容，不能被普通日志污染。
+- 后端返回的大对象需要在本地 MCP server 中整理为 AI 友好摘要。
+- 所有涉及订单、物流、导出的接口都要考虑权限、审计、限流和 PII 脱敏。
+
+## 2. 本地 CLI 命令
+
+```bash
+npx @tvcmall/mcp login
+npx @tvcmall/mcp logout
+npx @tvcmall/mcp whoami
+npx @tvcmall/mcp server
+npx @tvcmall/mcp install claude
+npx @tvcmall/mcp install cursor
+npx @tvcmall/mcp install codex
+```
+
+命令职责：
+
+- `login`：终端输入用户名和隐藏密码，调用 TVCMall 登录接口，保存 token。
+- `logout`：撤销本地 token，并调用后端 logout 失效当前 refresh token。
+- `whoami`：展示当前登录账号、客户 ID、权限范围，不展示 token。
+- `server`：启动 MCP stdio server，供 MCP Client 调用。
+- `install claude/cursor/codex`：自动写入对应 MCP Client 配置，降低客户安装成本。
+
+MCP Client 配置示例：
+
+```json
+{
+  "mcpServers": {
+    "tvcmall": {
+      "command": "npx",
+      "args": ["-y", "@tvcmall/mcp", "server"]
+    }
+  }
+}
+```
+
+## 3. 为什么 server 模式不接收密码
+
+不要在 `server` 模式里做交互式密码输入。MCP stdio 通道要用于 JSON-RPC 协议，如果 server 启动后在 `stdin/stdout` 上打印 `请输入密码`，很容易破坏 MCP 协议流。
+
+正确做法：
+
+```bash
+npx @tvcmall/mcp login
+```
+
+这个命令是独立 CLI，不是 MCP server。它可以安全地在终端读取用户名和隐藏密码。登录完成后，MCP server 再读取本地 token。
+
+## 4. 后端认证接口
+
+建议新增 MCP 专用授权接口，不要直接复用网页登录接口。
+
+```http
+POST /api/mcp/auth/login
+POST /api/mcp/auth/refresh
+POST /api/mcp/auth/logout
+GET  /api/mcp/auth/me
+```
+
+### POST /api/mcp/auth/login
+
+请求：
+
+```json
+{
+  "username": "customer@example.com",
+  "password": "********",
+  "device_name": "MacBook Pro",
+  "client": "tvcmall-mcp",
+  "client_version": "0.1.0"
+}
+```
+
+响应：
+
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "rft_...",
+  "expires_in": 7200,
+  "token_type": "Bearer",
+  "customer": {
+    "id": "cus_123",
+    "email": "customer@example.com",
+    "name": "Customer Name"
+  },
+  "scopes": [
+    "products:read",
+    "orders:read",
+    "tracking:read",
+    "orders:export"
+  ]
+}
+```
+
+### Token 策略
+
+- `access_token`：短期有效，例如 1-2 小时。
+- `refresh_token`：长期但可撤销，例如 30-90 天。
+- 后端支持设备级撤销。
+- 每次 refresh 可以轮换 refresh token。
+- 失败登录需要限流和风控。
+
+## 5. 本地凭证存储
+
+优先级：
+
+1. 系统凭证库：macOS Keychain、Windows Credential Manager、Linux Secret Service。
+2. 如果系统凭证库不可用，使用本地加密文件。
+3. 不允许保存明文密码。
+4. 不允许把 token 打印到 stdout。
+5. 日志中必须脱敏 token、用户名、地址、电话等敏感信息。
+
+本地配置建议：
+
+```text
+~/.config/tvcmall-mcp/config.json
+~/.config/tvcmall-mcp/logs/
+~/Downloads/tvcmall-exports/
+```
+
+其中 token 不建议直接放 `config.json`，应放系统凭证库。
+
+## 6. MCP Tools
+
+登录相关不要做成接收密码的 MCP tool。MCP tools 只使用已保存 token。
+
+### v0.1 tools 列表
+
+```text
+tvcmall_auth_status
+tvcmall_search_products
+tvcmall_get_product_detail
+tvcmall_estimate_shipping
+tvcmall_list_orders
+tvcmall_get_order_detail
+tvcmall_get_tracking_info
+tvcmall_batch_get_tracking
+tvcmall_export_orders
+```
+
+### tvcmall_auth_status
+
+```json
+{
+  "description": "检查当前 TVCMall MCP 是否已登录",
+  "input": {},
+  "output": {
+    "logged_in": true,
+    "customer_email": "customer@example.com",
+    "scopes": ["products:read", "orders:read"]
+  }
+}
+```
+
+### tvcmall_search_products
+
+```json
+{
+  "query": "iphone case",
+  "page": 1,
+  "page_size": 20
+}
+```
+
+返回应是 AI 友好的摘要，不要直接暴露过大的原始 API 响应。
+
+### tvcmall_list_orders
+
+```json
+{
+  "start_date": "2026-06-01",
+  "end_date": "2026-06-30",
+  "status": "shipped",
+  "page": 1,
+  "page_size": 20
+}
+```
+
+### tvcmall_batch_get_tracking
+
+```json
+{
+  "order_ids": ["V123", "V456", "V789"]
+}
+```
+
+建议限制：
+
+```text
+单次最多 50 个订单
+超过数量要求用户分批或使用导出
+```
+
+### tvcmall_export_orders
+
+```json
+{
+  "start_date": "2026-06-01",
+  "end_date": "2026-06-30",
+  "status": "shipped",
+  "format": "xlsx"
+}
+```
+
+响应：
+
+```json
+{
+  "file_path": "~/Downloads/tvcmall-exports/tvcmall-orders-20260707-153000.xlsx",
+  "order_count": 238,
+  "format": "xlsx",
+  "date_range": {
+    "start_date": "2026-06-01",
+    "end_date": "2026-06-30"
+  }
+}
+```
+
+## 7. 订单导出契约
+
+已确定：订单导出生成本地文件，不在 AI 对话中输出完整订单表。
+
+默认目录：
+
+```text
+~/Downloads/tvcmall-exports/
+```
+
+支持格式：
+
+```text
+v0.1：xlsx 优先，csv 可同时支持
+```
+
+安全限制：
+
+- 默认最多导出 90 天。
+- 大批量导出必须分页拉取。
+- 导出前后端做权限校验：`orders:export`。
+- MCP 对话里只返回文件路径和摘要。
+- 电话、邮箱、地址是否脱敏由后端权限控制。
+- 文件名带时间戳，避免覆盖。
+
+文件名示例：
+
+```text
+tvcmall-orders-20260707-153000.xlsx
+tvcmall-orders-20260707-153000.csv
+```
+
+## 8. 后端业务 API
+
+MCP 后端 Gateway 至少需要提供这些能力：
+
+```http
+GET  /api/mcp/products/search
+GET  /api/mcp/products/{id}
+POST /api/mcp/shipping/estimate
+
+GET  /api/mcp/orders
+GET  /api/mcp/orders/{id}
+GET  /api/mcp/orders/{id}/tracking
+POST /api/mcp/orders/tracking/batch
+POST /api/mcp/orders/export
+```
+
+如果已有 Open API 可以覆盖这些能力，后端可以先做一层 MCP Gateway 转发；如果现有 Open API 权限模型不适合客户侧 MCP，建议单独实现 MCP API 层。
+
+TVCMall 公开 Open API 文档已经有 Authorization、Product、Order、Shipping 等模块，可作为后端能力映射参考。
+
+## 9. 权限 Scope
+
+```text
+products:read       商品搜索和商品详情
+shipping:estimate   运费估算
+orders:read         订单列表和订单详情
+tracking:read       物流查询
+orders:export       订单导出
+profile:read        当前客户身份
+```
+
+第一版不要开放：
+
+```text
+orders:create
+orders:update
+orders:cancel
+payment:create
+address:update
+```
+
+## 10. 错误处理
+
+MCP server 不应直接把后端错误原文全部丢给 AI。建议统一错误码。
+
+```text
+AUTH_REQUIRED        未登录，请先运行 npx @tvcmall/mcp login
+TOKEN_EXPIRED        token 已过期，自动 refresh 失败
+PERMISSION_DENIED    当前账号没有该权限
+RATE_LIMITED         请求过快，请稍后再试
+VALIDATION_ERROR     参数格式错误
+API_UNAVAILABLE      TVCMall 服务暂不可用
+EXPORT_TOO_LARGE     导出范围过大，请缩小时间范围
+```
+
+用户可读错误示例：
+
+```text
+你还没有登录 TVCMall。请先在终端执行：
+npx @tvcmall/mcp login
+```
+
+## 11. 实现注意事项
+
+- 所有 tool 输入都要做 schema 校验。
+- 分页参数要设置默认值和上限。
+- 批量查询要设置最大数量，建议单次最多 50 个订单。
+- HTTP client 需要统一处理超时、重试、token refresh 和错误映射。
+- stdout 只用于 MCP 协议；日志输出到 stderr 或日志文件。
+- 返回给 AI 的数据要做摘要和脱敏，不要输出超大原始 JSON。
