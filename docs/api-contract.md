@@ -176,6 +176,33 @@ tvcmall_export_orders
 
 返回应是 AI 友好的摘要，不要直接暴露过大的原始 API 响应。当前结构化输出包含 `query`、`page`、`page_size`、`total`、`items`。
 
+### tvcmall_get_product_detail
+
+当前实现使用本地假商品详情数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。后续替换为真实 `/api/mcp/products/{id}`。
+
+```json
+{
+  "product_id": "prd_iphone_case_001"
+}
+```
+
+结构化输出包含商品摘要、MOQ、重量、尺寸、属性和图片 URL。
+
+### tvcmall_estimate_shipping
+
+当前实现使用本地假运费规则，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。后续替换为真实 `/api/mcp/shipping/estimate`。
+
+```json
+{
+  "destination_country": "US",
+  "items": [
+    { "product_id": "prd_iphone_case_001", "quantity": 10 }
+  ]
+}
+```
+
+结构化输出包含目的国家、计费重量、商品数量和多个运输选项。
+
 ### tvcmall_list_orders
 
 ```json

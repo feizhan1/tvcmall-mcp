@@ -17,6 +17,21 @@ export interface ProductSummary {
   summary: string;
 }
 
+export interface ProductDetail extends ProductSummary {
+  moq: number;
+  weight_kg: number;
+  dimensions_cm: {
+    length: number;
+    width: number;
+    height: number;
+  };
+  attributes: Array<{
+    name: string;
+    value: string;
+  }>;
+  images: string[];
+}
+
 export interface ProductSearchResult {
   query: string;
   page: number;
@@ -27,4 +42,5 @@ export interface ProductSearchResult {
 
 export interface ProductClient {
   searchProducts(input: ProductSearchInput, session: StoredAuthSession): Promise<ProductSearchResult>;
+  getProductDetail(productId: string, session: StoredAuthSession): Promise<ProductDetail | null>;
 }

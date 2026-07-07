@@ -13,6 +13,10 @@ export const SearchProductsInputSchema = z.object({
   page_size: z.number().int().min(1).max(50).default(20)
 });
 
+export const GetProductDetailInputSchema = z.object({
+  product_id: z.string().trim().min(1)
+});
+
 export const ProductSummarySchema = z.object({
   id: z.string(),
   sku: z.string(),
@@ -24,6 +28,23 @@ export const ProductSummarySchema = z.object({
   summary: z.string()
 });
 
+export const ProductDetailSchema = ProductSummarySchema.extend({
+  moq: z.number().int(),
+  weight_kg: z.number(),
+  dimensions_cm: z.object({
+    length: z.number(),
+    width: z.number(),
+    height: z.number()
+  }),
+  attributes: z.array(
+    z.object({
+      name: z.string(),
+      value: z.string()
+    })
+  ),
+  images: z.array(z.string())
+});
+
 export const SearchProductsOutputSchema = z.object({
   query: z.string(),
   page: z.number().int(),
@@ -33,8 +54,9 @@ export const SearchProductsOutputSchema = z.object({
 });
 
 export type SearchProductsInput = z.infer<typeof SearchProductsInputSchema>;
+export type GetProductDetailInput = z.infer<typeof GetProductDetailInputSchema>;
 
-export interface SearchProductsDependencies {
+export interface ProductToolDependencies {
   tokenStore: TokenStore;
   authClient?: AuthClient;
   productClient?: ProductClient;
@@ -43,23 +65,12 @@ export interface SearchProductsDependencies {
 
 export async function searchProductsForMcp(
   input: SearchProductsInput,
-  dependencies: SearchProductsDependencies
+  dependencies: ProductToolDependencies
 ): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, {
-    authClient: dependencies.authClient,
-    now: dependencies.now
-  });
+  const session = await getToolSession(dependencies);
 
   if (!session) {
-    return {
-      isError: true,
-      content: [
-        {
-          type: 'text',
-          text: MCP_ERROR_MESSAGES.AUTH_REQUIRED
-        }
-      ]
-    };
+    return authRequiredResult();
   }
 
   const parsedInput = SearchProductsInputSchema.parse(input);
@@ -74,6 +85,62 @@ export async function searchProductsForMcp(
       }
     ],
     structuredContent: { ...result }
+  };
+}
+
+export async function getProductDetailForMcp(
+  input: GetProductDetailInput,
+  dependencies: ProductToolDependencies
+): Promise<CallToolResult> {
+  const session = await getToolSession(dependencies);
+
+  if (!session) {
+    return authRequiredResult();
+  }
+
+  const parsedInput = GetProductDetailInputSchema.parse(input);
+  const productClient = dependencies.productClient ?? new FakeProductClient();
+  const detail = await productClient.getProductDetail(parsedInput.product_id, session);
+
+  if (!detail) {
+    return {
+      isError: true,
+      content: [
+        {
+          type: 'text',
+          text: `PRODUCT_NOT_FOUND: 未找到商品 ${parsedInput.product_id}`
+        }
+      ]
+    };
+  }
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `${detail.title} (${detail.sku})\n价格：${detail.currency} ${detail.price.toFixed(2)}\nMOQ：${detail.moq}\n库存：${detail.stock_status}`
+      }
+    ],
+    structuredContent: { ...detail }
+  };
+}
+
+async function getToolSession(dependencies: ProductToolDependencies) {
+  return getActiveSession(dependencies.tokenStore, {
+    authClient: dependencies.authClient,
+    now: dependencies.now
+  });
+}
+
+function authRequiredResult(): CallToolResult {
+  return {
+    isError: true,
+    content: [
+      {
+        type: 'text',
+        text: MCP_ERROR_MESSAGES.AUTH_REQUIRED
+      }
+    ]
   };
 }
 
