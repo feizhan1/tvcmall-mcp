@@ -25,8 +25,8 @@ npx @tvcmall/mcp install codex
 命令职责：
 
 - `login`：当前实现使用本地假数据保存 fake token session；后续替换为终端输入用户名和隐藏密码，调用 TVCMall 登录接口，保存真实 token。
-- `logout`：撤销本地 token，并调用后端 logout 失效当前 refresh token。
-- `whoami`：展示当前登录账号、客户 ID、权限范围，不展示 token。
+- `logout`：当前实现先调用 fake logout，再清除本地 token；后续替换为调用后端 logout 失效当前 refresh token。
+- `whoami`：展示当前登录账号、客户 ID、权限范围，不展示 token；如果 session 过期，当前 fake 实现会自动 refresh。
 - `server`：启动 MCP stdio server，供 MCP Client 调用。
 - `install claude/cursor/codex`：自动写入对应 MCP Client 配置，降低客户安装成本。
 
@@ -53,7 +53,7 @@ MCP Client 配置示例：
 npx @tvcmall/mcp login
 ```
 
-这个命令是独立 CLI，不是 MCP server。当前开发阶段它使用假数据保存 fake token session；后续接入真实接口后，它可以安全地在终端读取用户名和隐藏密码。登录完成后，MCP server 再读取本地 token。
+这个命令是独立 CLI，不是 MCP server。当前开发阶段它使用假数据保存 fake token session，并提供 fake refresh/logout/me 打通本地链路；后续接入真实接口后，它可以安全地在终端读取用户名和隐藏密码。登录完成后，MCP server 再读取本地 token。
 
 ## 4. 后端认证接口
 
@@ -325,6 +325,6 @@ npx @tvcmall/mcp login
 - 所有 tool 输入都要做 schema 校验。
 - 分页参数要设置默认值和上限。
 - 批量查询要设置最大数量，建议单次最多 50 个订单。
-- HTTP client 需要统一处理超时、重试、token refresh 和错误映射。
+- 当前 fake auth client 已覆盖 login、refresh、logout、me；真实 HTTP client 需要统一处理超时、重试、token refresh 和错误映射。
 - stdout 只用于 MCP 协议；日志输出到 stderr 或日志文件。
 - 返回给 AI 的数据要做摘要和脱敏，不要输出超大原始 JSON。

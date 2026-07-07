@@ -34,14 +34,14 @@ export function createCli(options: CliOptions = {}): Command {
     .command('server')
     .description('启动 TVCMall MCP stdio server')
     .action(async () => {
-      await startMcpServer({ tokenStore });
+      await startMcpServer({ tokenStore, authClient });
     });
 
   program
     .command('whoami')
     .description('展示当前登录账号和权限范围')
     .action(async () => {
-      stdout.write(`${formatWhoami(await getAuthStatus(tokenStore))}\n`);
+      stdout.write(`${formatWhoami(await getAuthStatus(tokenStore, { authClient }))}\n`);
     });
 
   program
@@ -64,6 +64,10 @@ export function createCli(options: CliOptions = {}): Command {
     .command('logout')
     .description('清除本地登录状态')
     .action(async () => {
+      const session = await tokenStore.getSession();
+      if (session) {
+        await authClient.logout(session);
+      }
       await tokenStore.clearSession();
       stdout.write('已清除本地 TVCMall MCP 登录状态。\n');
     });

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { AuthClient } from '../auth/auth-client.js';
+import { getActiveSession } from '../auth/session-manager.js';
 import type { TokenStore } from '../storage/token-store.js';
 
 export const AuthStatusOutputSchema = z.object({
@@ -10,8 +12,16 @@ export const AuthStatusOutputSchema = z.object({
 
 export type AuthStatus = z.infer<typeof AuthStatusOutputSchema>;
 
-export async function getAuthStatus(tokenStore: TokenStore): Promise<AuthStatus> {
-  const session = await tokenStore.getSession();
+export interface AuthStatusOptions {
+  authClient?: AuthClient;
+  now?: () => Date;
+}
+
+export async function getAuthStatus(
+  tokenStore: TokenStore,
+  options: AuthStatusOptions = {}
+): Promise<AuthStatus> {
+  const session = await getActiveSession(tokenStore, options);
 
   if (!session) {
     return {
@@ -27,8 +37,11 @@ export async function getAuthStatus(tokenStore: TokenStore): Promise<AuthStatus>
   };
 }
 
-export async function createAuthStatusToolResult(tokenStore: TokenStore): Promise<CallToolResult> {
-  const status = await getAuthStatus(tokenStore);
+export async function createAuthStatusToolResult(
+  tokenStore: TokenStore,
+  options: AuthStatusOptions = {}
+): Promise<CallToolResult> {
+  const status = await getAuthStatus(tokenStore, options);
 
   return {
     content: [

@@ -2,7 +2,7 @@
 
 TVCMall Customer MCP 是面向 TVCMall 客户、采购商、分销商和店铺运营人员的本地 MCP server。客户在自己的电脑上安装后，可以通过 Claude、Cursor、Codex 或其他 MCP Client 查询 TVCMall 商品、订单、物流，并将订单导出为本地文件。
 
-> 当前状态：v0.1 最小 TypeScript 骨架已初始化，已包含 stdio MCP server、`tvcmall_auth_status`、基础 CLI、系统凭证库 token store、fake login、测试与构建脚本。业务 API 和真实登录流程仍待接入。
+> 当前状态：v0.1 最小 TypeScript 骨架已初始化，已包含 stdio MCP server、`tvcmall_auth_status`、基础 CLI、系统凭证库 token store、fake auth 的 login/refresh/logout/me、过期自动 refresh、测试与构建脚本。业务 API 和真实登录流程仍待接入。
 
 ## 文档地图
 
@@ -42,7 +42,7 @@ node dist/index.js login
 node dist/index.js whoami
 ```
 
-当前 `login` 使用本地假数据：会保存 `fake.customer@example.com` 的 fake token session 到系统凭证库，用于打通 CLI、token store 和 MCP `auth_status` 链路；它不会请求密码，也不会连接 TVCMall 后端。
+当前认证使用本地假数据：`login` 会保存 `fake.customer@example.com` 的 fake token session 到系统凭证库，`whoami` 和 MCP `tvcmall_auth_status` 会在 session 过期时自动 refresh，`logout` 会先调用 fake logout 再清除本地 session；这些命令不会请求密码，也不会连接 TVCMall 后端。
 
 ## 规划中的客户使用方式
 
