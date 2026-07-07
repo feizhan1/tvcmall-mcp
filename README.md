@@ -2,7 +2,7 @@
 
 TVCMall Customer MCP 是面向 TVCMall 客户、采购商、分销商和店铺运营人员的本地 MCP server。客户在自己的电脑上安装后，可以通过 Claude、Cursor、Codex 或其他 MCP Client 查询 TVCMall 商品、订单、物流，并将订单导出为本地文件。
 
-> 当前状态：v0.1 最小 TypeScript 骨架已初始化，已包含 stdio MCP server、`tvcmall_auth_status`、基础 CLI、测试与构建脚本。业务 API 和真实登录流程仍待接入。
+> 当前状态：v0.1 最小 TypeScript 骨架已初始化，已包含 stdio MCP server、`tvcmall_auth_status`、基础 CLI、系统凭证库 token store、测试与构建脚本。业务 API 和真实登录流程仍待接入。
 
 ## 文档地图
 
@@ -88,6 +88,7 @@ MCP Client 配置目标示例：
 - `zod`
 - Node 内置 `fetch` 或 `undici`
 - `commander` 或同类 CLI 框架
+- `keytar`
 - `xlsx` 或 `exceljs`
 - `vitest`
 

@@ -114,8 +114,8 @@ GET  /api/mcp/auth/me
 
 优先级：
 
-1. 系统凭证库：macOS Keychain、Windows Credential Manager、Linux Secret Service。
-2. 如果系统凭证库不可用，使用本地加密文件。
+1. 系统凭证库：macOS Keychain、Windows Credential Manager、Linux Secret Service。当前本地实现使用 `keytar` 适配系统凭证库。
+2. 如果系统凭证库不可用，当前实现安全降级为未登录状态；本地加密文件 fallback 需要单独评审密钥管理方案。
 3. 不允许保存明文密码。
 4. 不允许把 token 打印到 stdout。
 5. 日志中必须脱敏 token、用户名、地址、电话等敏感信息。

@@ -9,6 +9,8 @@ class FakeTokenStore implements TokenStore {
     return this.session;
   }
 
+  async saveSession(): Promise<void> {}
+
   async clearSession(): Promise<void> {}
 }
 

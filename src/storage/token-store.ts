@@ -1,3 +1,5 @@
+import { KeychainTokenStore } from './keychain-token-store.js';
+
 export interface StoredCustomer {
   id: string;
   email: string;
@@ -15,6 +17,7 @@ export interface StoredAuthSession {
 
 export interface TokenStore {
   getSession(): Promise<StoredAuthSession | null>;
+  saveSession(session: StoredAuthSession): Promise<void>;
   clearSession(): Promise<void>;
 }
 
@@ -23,9 +26,11 @@ export class NullTokenStore implements TokenStore {
     return null;
   }
 
+  async saveSession(): Promise<void> {}
+
   async clearSession(): Promise<void> {}
 }
 
 export function createDefaultTokenStore(): TokenStore {
-  return new NullTokenStore();
+  return new KeychainTokenStore();
 }

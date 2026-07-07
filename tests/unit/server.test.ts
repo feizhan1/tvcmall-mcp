@@ -7,6 +7,8 @@ class FakeTokenStore implements TokenStore {
     return null;
   }
 
+  async saveSession(): Promise<void> {}
+
   async clearSession(): Promise<void> {}
 }
 
