@@ -24,7 +24,7 @@ npx @tvcmall/mcp install codex
 
 命令职责：
 
-- `login`：终端输入用户名和隐藏密码，调用 TVCMall 登录接口，保存 token。
+- `login`：当前实现使用本地假数据保存 fake token session；后续替换为终端输入用户名和隐藏密码，调用 TVCMall 登录接口，保存真实 token。
 - `logout`：撤销本地 token，并调用后端 logout 失效当前 refresh token。
 - `whoami`：展示当前登录账号、客户 ID、权限范围，不展示 token。
 - `server`：启动 MCP stdio server，供 MCP Client 调用。
@@ -53,7 +53,7 @@ MCP Client 配置示例：
 npx @tvcmall/mcp login
 ```
 
-这个命令是独立 CLI，不是 MCP server。它可以安全地在终端读取用户名和隐藏密码。登录完成后，MCP server 再读取本地 token。
+这个命令是独立 CLI，不是 MCP server。当前开发阶段它使用假数据保存 fake token session；后续接入真实接口后，它可以安全地在终端读取用户名和隐藏密码。登录完成后，MCP server 再读取本地 token。
 
 ## 4. 后端认证接口
 

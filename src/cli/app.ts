@@ -5,6 +5,8 @@ import { getAuthStatus } from '../tools/auth-status.js';
 import type { TokenStore } from '../storage/token-store.js';
 import { createDefaultTokenStore } from '../storage/token-store.js';
 import { PACKAGE_VERSION } from '../version.js';
+import type { AuthClient } from '../auth/auth-client.js';
+import { FakeAuthClient } from '../auth/fake-auth-client.js';
 
 export interface CliOutput {
   write(chunk: string): unknown;
@@ -12,12 +14,14 @@ export interface CliOutput {
 
 export interface CliOptions {
   tokenStore?: TokenStore;
+  authClient?: AuthClient;
   stdout?: CliOutput;
   stderr?: CliOutput;
 }
 
 export function createCli(options: CliOptions = {}): Command {
   const tokenStore = options.tokenStore ?? createDefaultTokenStore();
+  const authClient = options.authClient ?? new FakeAuthClient();
   const stdout = options.stdout ?? process.stdout;
   const program = new Command();
 
@@ -42,13 +46,16 @@ export function createCli(options: CliOptions = {}): Command {
 
   program
     .command('login')
-    .description('通过独立 CLI 登录 TVCMall')
-    .action(() => {
+    .description('使用假数据登录 TVCMall MCP，本地保存 fake token session')
+    .action(async () => {
+      const session = await authClient.login();
+      await tokenStore.saveSession(session);
       stdout.write(
         [
-          'TVCMall MCP 登录命令已预留。',
-          '后续接入 /api/mcp/auth/login 后，将在此命令中隐藏输入密码并保存 token。',
-          '不要在 MCP tool 或 server stdio 通道中输入密码。'
+          '已使用假数据登录 TVCMall MCP。',
+          `当前账号：${session.customer.email}`,
+          `权限范围：${session.scopes.join(', ')}`,
+          '注意：当前为本地开发 fake token，后续会替换为真实 /api/mcp/auth/login。'
         ].join('\n') + '\n'
       );
     });
