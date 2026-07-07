@@ -200,7 +200,7 @@ MVP 完成标准：
 ## 10. 建议立即开始的事项
 
 1. 后端先定义 MCP Auth API 契约，尤其是 token、scope、refresh、logout。
-2. 工具侧先做 `@tvcmall/mcp` 空壳，跑通 stdio MCP + `auth_status`。
+2. 工具侧已初始化 `@tvcmall/mcp` 空壳；下一步接入真实 MCP Auth API。
 3. 并行确认商品、订单、物流、运费接口是否能用 Bearer token 调用。
 4. 先内部发布 npm beta，找 1-2 个测试账号跑完整链路。
 5. 最后再做 `install claude/cursor/codex` 的自动配置命令。

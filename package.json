@@ -1,0 +1,40 @@
+{
+  "name": "@tvcmall/mcp",
+  "version": "0.1.0",
+  "description": "Local MCP server for TVCMall customer product, order, tracking, and export workflows.",
+  "type": "module",
+  "bin": {
+    "tvcmall-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "dev": "tsx src/index.ts"
+  },
+  "keywords": [
+    "tvcmall",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^14.0.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}
