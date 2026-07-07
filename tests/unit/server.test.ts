@@ -20,6 +20,10 @@ describe('createTvcMallMcpServer', () => {
     expect(Object.keys(registeredTools)).toContain('tvcmall_auth_status');
     expect(Object.keys(registeredTools)).toContain('tvcmall_search_products');
     expect(Object.keys(registeredTools)).toContain('tvcmall_estimate_shipping');
+    expect(Object.keys(registeredTools)).toContain('tvcmall_batch_get_tracking');
+    expect(Object.keys(registeredTools)).toContain('tvcmall_get_tracking_info');
+    expect(Object.keys(registeredTools)).toContain('tvcmall_get_order_detail');
+    expect(Object.keys(registeredTools)).toContain('tvcmall_list_orders');
     expect(Object.keys(registeredTools)).toContain('tvcmall_get_product_detail');
   });
 });

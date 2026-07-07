@@ -205,6 +205,8 @@ tvcmall_export_orders
 
 ### tvcmall_list_orders
 
+当前实现使用本地假订单数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。后续替换为真实 `/api/mcp/orders`。
+
 ```json
 {
   "start_date": "2026-06-01",
@@ -215,7 +217,29 @@ tvcmall_export_orders
 }
 ```
 
+### tvcmall_get_order_detail
+
+当前实现使用本地假订单详情数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，找不到订单返回 `ORDER_NOT_FOUND`。后续替换为真实 `/api/mcp/orders/{id}`。
+
+```json
+{
+  "order_id": "V10001"
+}
+```
+
+### tvcmall_get_tracking_info
+
+当前实现使用本地假物流数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，找不到物流返回 `TRACKING_NOT_FOUND`。后续替换为真实 `/api/mcp/orders/{id}/tracking`。
+
+```json
+{
+  "order_id": "V10001"
+}
+```
+
 ### tvcmall_batch_get_tracking
+
+当前实现使用本地假物流数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，单次最多 50 个订单。后续替换为真实 `/api/mcp/orders/tracking/batch`。
 
 ```json
 {
