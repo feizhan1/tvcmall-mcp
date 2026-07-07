@@ -164,6 +164,8 @@ tvcmall_export_orders
 
 ### tvcmall_search_products
 
+当前实现使用本地假商品数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED` 引导。后续替换为真实 `/api/mcp/products/search`。
+
 ```json
 {
   "query": "iphone case",
@@ -172,7 +174,7 @@ tvcmall_export_orders
 }
 ```
 
-返回应是 AI 友好的摘要，不要直接暴露过大的原始 API 响应。
+返回应是 AI 友好的摘要，不要直接暴露过大的原始 API 响应。当前结构化输出包含 `query`、`page`、`page_size`、`total`、`items`。
 
 ### tvcmall_list_orders
 

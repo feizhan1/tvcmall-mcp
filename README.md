@@ -2,7 +2,7 @@
 
 TVCMall Customer MCP 是面向 TVCMall 客户、采购商、分销商和店铺运营人员的本地 MCP server。客户在自己的电脑上安装后，可以通过 Claude、Cursor、Codex 或其他 MCP Client 查询 TVCMall 商品、订单、物流，并将订单导出为本地文件。
 
-> 当前状态：v0.1 最小 TypeScript 骨架已初始化，已包含 stdio MCP server、`tvcmall_auth_status`、基础 CLI、系统凭证库 token store、fake auth 的 login/refresh/logout/me、过期自动 refresh、测试与构建脚本。业务 API 和真实登录流程仍待接入。
+> 当前状态：v0.1 最小 TypeScript 骨架已初始化，已包含 stdio MCP server、`tvcmall_auth_status`、`tvcmall_search_products` 假数据商品搜索、基础 CLI、系统凭证库 token store、fake auth 的 login/refresh/logout/me、过期自动 refresh、测试与构建脚本。真实业务 API 仍待接入。
 
 ## 文档地图
 
@@ -144,7 +144,8 @@ tvcmall-mcp/
 
 1. 确认后端 MCP Auth API 契约，尤其是 token、scope、refresh、logout。
 2. 将当前 fake login 替换为真实 `/api/mcp/auth/login`、`refresh`、`logout`、`me` 接口。
-3. 确认商品、订单、物流、运费接口是否能用 Bearer token 调用。
+3. 将当前 fake `tvcmall_search_products` 替换为真实 `/api/mcp/products/search`。
+4. 确认订单、物流、运费接口是否能用 Bearer token 调用。
 4. 内部发布 npm beta，用 1-2 个测试账号跑完整链路。
 5. 实现 `install claude`、`install cursor`、`install codex` 自动配置命令。
 

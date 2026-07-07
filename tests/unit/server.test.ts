@@ -18,5 +18,6 @@ describe('createTvcMallMcpServer', () => {
     const registeredTools = (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools;
 
     expect(Object.keys(registeredTools)).toContain('tvcmall_auth_status');
+    expect(Object.keys(registeredTools)).toContain('tvcmall_search_products');
   });
 });
