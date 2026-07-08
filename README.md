@@ -21,6 +21,7 @@ v0.1 是客户侧本地 MCP，默认只读。
 - 商品查询：搜索商品、查看商品详情。
 - 运费估算：根据商品和目的地估算运输费用。
 - 订单查询：查看订单列表和订单详情。
+- 积分查询：查看客户积分和积分记录。
 - 物流查询：查询单个或批量订单的物流状态。
 - 订单导出：将订单导出为本地 `xlsx` 或 `csv` 文件。
 
@@ -54,11 +55,12 @@ node dist/index.js whoami
 | `TVCMALL_API_BASE_URL` | `https://api.tvcmall.com` | 真实 TVCMall API base URL |
 | `TVCMALL_API_TIMEOUT_MS` | `15000` | HTTP 请求超时时间，单位毫秒 |
 | `TVCMALL_API_ENV` | `production` | API 环境：`production`、`staging` 或 `sandbox` |
+| `TVCMALL_DATA_SOURCE` | `fake` | 数据源：`fake` 使用本地 fixtures，`real` 使用真实 HTTP API |
 | `TVCMALL_API_AUTHORIZATION` | 未设置 | `/user/login` 所需的 `Authorization` header，来自后端接口文档或部署配置 |
 | `TVCMALL_LOG_LEVEL` | `info` | 日志级别：`silent`、`error`、`warn`、`info`、`debug` |
 | `TVCMALL_EXPORT_DIR` | 未设置 | 默认订单导出目录 |
 
-不要把 `access_token`、`refresh_token`、密码或客户 PII 放进环境变量；用户 token 继续通过 CLI login 写入系统凭证库。`TVCMALL_API_AUTHORIZATION` 如属于敏感部署凭据，也不要提交到仓库。
+不要把 `access_token`、`refresh_token`、密码或客户 PII 放进环境变量；用户 token 继续通过 CLI login 写入系统凭证库。`TVCMALL_API_AUTHORIZATION` 只用于登录接口，如属于敏感部署凭据，也不要提交到仓库。真实数据模式下，商品、订单、积分 API 的 `Authorization` header 来自登录后保存的 `session.accessToken`。
 
 ## Harness 化开发
 

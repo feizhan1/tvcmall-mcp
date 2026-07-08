@@ -13,14 +13,16 @@ describe('runtime config', () => {
       TVCMALL_API_ENV: 'sandbox',
       TVCMALL_LOG_LEVEL: 'debug',
       TVCMALL_EXPORT_DIR: ' /tmp/tvcmall-exports ',
-      TVCMALL_API_AUTHORIZATION: ' login-api-authorization-example '
+      TVCMALL_API_AUTHORIZATION: ' login-api-authorization-example ',
+      TVCMALL_DATA_SOURCE: 'real'
     })).toEqual({
       apiBaseUrl: 'https://sandbox-api.tvcmall.test',
       apiTimeoutMs: 25000,
       apiEnv: 'sandbox',
       logLevel: 'debug',
       exportDir: '/tmp/tvcmall-exports',
-      apiAuthorization: 'login-api-authorization-example'
+      apiAuthorization: 'login-api-authorization-example',
+      dataSource: 'real'
     });
   });
 

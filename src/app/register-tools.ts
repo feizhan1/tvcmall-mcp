@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { AuthClient } from '../auth/auth-client.js';
 import type { OrderClient } from '../orders/order-client.js';
+import type { PointsClient } from '../points/points-client.js';
 import type { ProductClient } from '../products/product-client.js';
 import type { ShippingClient } from '../shipping/shipping-client.js';
 import type { TokenStore } from '../storage/token-store.js';
@@ -24,6 +25,7 @@ import {
   getProductDetailForMcp,
   searchProductsForMcp
 } from '../tools/products.js';
+import { GetPointsInputSchema, ListPointRecordsInputSchema, ListPointRecordsOutputSchema, PointsStatOutputSchema, getPointsForMcp, listPointRecordsForMcp } from '../tools/points.js';
 import { EstimateShippingInputSchema, EstimateShippingOutputSchema, estimateShippingForMcp } from '../tools/shipping.js';
 import {
   BatchGetTrackingInputSchema,
@@ -38,13 +40,14 @@ export interface RegisterToolDependencies {
   tokenStore: TokenStore;
   authClient: AuthClient;
   productClient: ProductClient;
+  pointsClient: PointsClient;
   shippingClient: ShippingClient;
   orderClient: OrderClient;
   trackingClient: TrackingClient;
 }
 
 export function registerTvcMallTools(server: McpServer, dependencies: RegisterToolDependencies): void {
-  const { tokenStore, authClient, productClient, shippingClient, orderClient, trackingClient } = dependencies;
+  const { tokenStore, authClient, productClient, pointsClient, shippingClient, orderClient, trackingClient } = dependencies;
 
   server.registerTool(
     'tvcmall_auth_status',
@@ -62,6 +65,18 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
     'tvcmall_get_product_detail',
     { title: 'TVCMall Get Product Detail', description: '使用假数据查看 TVCMall 商品详情，后续替换为真实商品详情 API', inputSchema: GetProductDetailInputSchema, outputSchema: ProductDetailSchema },
     async (input) => getProductDetailForMcp(input, { tokenStore, authClient, productClient })
+  );
+
+  server.registerTool(
+    'tvcmall_get_points',
+    { title: 'TVCMall Get Points', description: '查询当前客户 TVCMall 积分', inputSchema: GetPointsInputSchema, outputSchema: PointsStatOutputSchema },
+    async (input) => getPointsForMcp(input, { tokenStore, authClient, pointsClient })
+  );
+
+  server.registerTool(
+    'tvcmall_list_point_records',
+    { title: 'TVCMall List Point Records', description: '查询当前客户 TVCMall 积分获取和使用记录', inputSchema: ListPointRecordsInputSchema, outputSchema: ListPointRecordsOutputSchema },
+    async (input) => listPointRecordsForMcp(input, { tokenStore, authClient, pointsClient })
   );
 
   server.registerTool(

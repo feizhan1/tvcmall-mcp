@@ -142,13 +142,28 @@ GET  /api/mcp/auth/me
 | `TVCMALL_API_BASE_URL` | `https://api.tvcmall.com` | TVCMall HTTP API base URL |
 | `TVCMALL_API_TIMEOUT_MS` | `15000` | HTTP 请求超时时间，单位毫秒；无效值回退默认值 |
 | `TVCMALL_API_ENV` | `production` | API 环境：`production`、`staging`、`sandbox`；无效值回退默认值 |
+| `TVCMALL_DATA_SOURCE` | `fake` | 数据源：`fake` 使用本地 fixtures，`real` 使用真实 HTTP API；无效值回退默认值 |
 | `TVCMALL_API_AUTHORIZATION` | 未设置 | `/user/login` 所需的 `Authorization` header；如属于敏感部署凭据，不应提交到仓库 |
 | `TVCMALL_LOG_LEVEL` | `info` | 日志级别：`silent`、`error`、`warn`、`info`、`debug`；无效值回退默认值 |
 | `TVCMALL_EXPORT_DIR` | 未设置 | 默认订单导出目录；为空时由导出逻辑自行选择安全默认目录 |
 
-环境变量只用于非敏感运行时配置；`access_token`、`refresh_token`、密码、完整地址、电话、邮箱等敏感信息不应放入环境变量、`config.json` 或日志。
+环境变量只用于非敏感运行时配置；`access_token`、`refresh_token`、密码、完整地址、电话、邮箱等敏感信息不应放入环境变量、`config.json` 或日志。除 `/user/login` 使用 `TVCMALL_API_AUTHORIZATION` 外，真实 HTTP client 必须从已保存的 `StoredAuthSession.accessToken` 设置请求头 `Authorization`。
 
-## 6. MCP Tools
+## 6. 真实 HTTP API 映射
+
+`TVCMALL_DATA_SOURCE=real` 时，当前已接入以下真实 endpoint；未列出的能力继续使用 fake client 或后续补充真实 API 文档。
+
+| MCP 能力 | 外部 API | 请求方式 | 鉴权 |
+| --- | --- | --- | --- |
+| 登录 | `/user/login` | `POST` JSON body | `Authorization` 来自 `TVCMALL_API_AUTHORIZATION` |
+| 商品搜索 | `/v3/product/list/search/mapping` | `GET` query `body` JSON string | `Authorization` 来自 `session.accessToken` |
+| 商品详情 | `/v3/productdetail/detail` | `GET` query `body` JSON string | `Authorization` 来自 `session.accessToken` |
+| 订单列表 | `/v3/user/getorders` | `POST` JSON body | `Authorization` 来自 `session.accessToken` |
+| 订单详情 | `/v3/order/detail` | `POST` query `orderId` | `Authorization` 来自 `session.accessToken` |
+| 客户积分 | `/m/user/points/stat` | `GET` | `Authorization` 来自 `session.accessToken` |
+| 积分记录 | `/v3/user/points/list` | `GET` query `pageindex/pagesize` | `Authorization` 来自 `session.accessToken` |
+
+## 7. MCP Tools
 
 登录相关不要做成接收密码的 MCP tool。MCP tools 只使用已保存 token。
 
@@ -159,6 +174,8 @@ tvcmall_auth_status
 tvcmall_search_products
 tvcmall_get_product_detail
 tvcmall_estimate_shipping
+tvcmall_get_points
+tvcmall_list_point_records
 tvcmall_list_orders
 tvcmall_get_order_detail
 tvcmall_get_tracking_info
@@ -182,7 +199,7 @@ tvcmall_export_orders
 
 ### tvcmall_search_products
 
-当前实现使用本地假商品数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED` 引导。后续替换为真实 `/api/mcp/products/search`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED` 引导。`fake` 模式使用本地假商品数据，`real` 模式调用真实 `/v3/product/list/search/mapping`。
 
 ```json
 {
@@ -196,7 +213,7 @@ tvcmall_export_orders
 
 ### tvcmall_get_product_detail
 
-当前实现使用本地假商品详情数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。后续替换为真实 `/api/mcp/products/{id}`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。`fake` 模式使用本地假商品详情数据，`real` 模式调用真实 `/v3/productdetail/detail`。
 
 ```json
 {
@@ -221,9 +238,32 @@ tvcmall_export_orders
 
 结构化输出包含目的国家、计费重量、商品数量和多个运输选项。
 
+### tvcmall_get_points
+
+当前实现可在 `TVCMALL_DATA_SOURCE=fake` 下返回本地积分假数据；`real` 模式下调用真实 `GET /m/user/points/stat`，请求头 `Authorization` 使用登录后保存的 access token。
+
+```json
+{}
+```
+
+结构化输出包含 `available_points`、`pending_points`、`total_earned`、`total_used`。
+
+### tvcmall_list_point_records
+
+当前实现可在 `TVCMALL_DATA_SOURCE=fake` 下返回本地积分记录假数据；`real` 模式下调用真实 `GET /v3/user/points/list`，请求头 `Authorization` 使用登录后保存的 access token。
+
+```json
+{
+  "page": 1,
+  "page_size": 20
+}
+```
+
+结构化输出包含分页信息和积分记录列表。
+
 ### tvcmall_list_orders
 
-当前实现使用本地假订单数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。后续替换为真实 `/api/mcp/orders`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。`fake` 模式使用本地假订单数据，`real` 模式调用真实 `/v3/user/getorders`。
 
 ```json
 {

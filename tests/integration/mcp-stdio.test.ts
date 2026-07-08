@@ -23,6 +23,8 @@ describe('MCP stdio harness', () => {
     expect(toolNames).toEqual(expect.arrayContaining([
       'tvcmall_auth_status',
       'tvcmall_search_products',
+      'tvcmall_get_points',
+      'tvcmall_list_point_records',
       'tvcmall_export_orders'
     ]));
 

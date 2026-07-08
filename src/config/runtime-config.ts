@@ -1,14 +1,17 @@
 export const API_ENV_VALUES = ['production', 'staging', 'sandbox'] as const;
 export const LOG_LEVEL_VALUES = ['silent', 'error', 'warn', 'info', 'debug'] as const;
+export const DATA_SOURCE_VALUES = ['fake', 'real'] as const;
 
 export type TvcMallApiEnv = typeof API_ENV_VALUES[number];
 export type TvcMallLogLevel = typeof LOG_LEVEL_VALUES[number];
+export type TvcMallDataSource = typeof DATA_SOURCE_VALUES[number];
 
 export interface TvcMallRuntimeConfig {
   apiBaseUrl: string;
   apiTimeoutMs: number;
   apiEnv: TvcMallApiEnv;
   logLevel: TvcMallLogLevel;
+  dataSource: TvcMallDataSource;
   exportDir?: string;
   apiAuthorization?: string;
 }
@@ -17,7 +20,8 @@ export const DEFAULT_RUNTIME_CONFIG: TvcMallRuntimeConfig = {
   apiBaseUrl: 'https://api.tvcmall.com',
   apiTimeoutMs: 15000,
   apiEnv: 'production',
-  logLevel: 'info'
+  logLevel: 'info',
+  dataSource: 'fake'
 };
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMallRuntimeConfig {
@@ -26,6 +30,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMall
     apiTimeoutMs: readPositiveInteger(env.TVCMALL_API_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiTimeoutMs,
     apiEnv: readEnum(env.TVCMALL_API_ENV, API_ENV_VALUES) ?? DEFAULT_RUNTIME_CONFIG.apiEnv,
     logLevel: readEnum(env.TVCMALL_LOG_LEVEL, LOG_LEVEL_VALUES) ?? DEFAULT_RUNTIME_CONFIG.logLevel,
+    dataSource: readEnum(env.TVCMALL_DATA_SOURCE, DATA_SOURCE_VALUES) ?? DEFAULT_RUNTIME_CONFIG.dataSource,
     ...readOptionalValue('exportDir', env.TVCMALL_EXPORT_DIR),
     ...readOptionalValue('apiAuthorization', env.TVCMALL_API_AUTHORIZATION)
   };

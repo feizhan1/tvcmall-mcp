@@ -1,0 +1,54 @@
+openapi: 3.0.1
+info:
+  title: 默认模块
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /v3/product/list/search/mapping:
+    get:
+      summary: 关键字搜索商品
+      deprecated: false
+      description: ''
+      tags: []
+      parameters:
+        - name: body
+          in: query
+          description: ''
+          required: false
+          example: >-
+            {"pageindex":1,"pagesize":40,"sort":"default","attributes":[],"catalogCodes":[],"purchaseTag":"0","keywords":"iPhone17
+            pro case","url":"/search","noAttr":true,"fromAlgolia":true}
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          description: ''
+          example: login-access-token-example
+          schema:
+            type: string
+            default: login-access-token-example
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties: {}
+            examples: {}
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+          headers: {}
+      security: []
+components:
+  schemas: {}
+  responses: {}
+  securitySchemes: {}
+servers: []
+security: []

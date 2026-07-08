@@ -1,0 +1,45 @@
+openapi: 3.0.1
+info:
+  title: 默认模块
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /v3/productdetail/detail:
+    get:
+      summary: 商详-详情
+      deprecated: false
+      description: ''
+      tags: []
+      parameters:
+        - name: body
+          in: query
+          description: ''
+          required: false
+          example: >-
+            {%22url%22:%22/details/for-fujifilm-x-t50-pu-leather-half-case-grip-digital-camera-bag-cover-with-opening-bottom-black-sku6828000304d.html%22}
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          description: ''
+          example: login-access-token-example
+          schema:
+            type: string
+            default: login-access-token-example
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+          headers: {}
+      security: []
+components:
+  schemas: {}
+  responses: {}
+  securitySchemes: {}
+servers: []
+security: []
