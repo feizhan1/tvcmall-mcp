@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KeychainTokenStore, type CredentialStoreAdapter } from '../../src/storage/keychain-token-store.js';
+import { KeychainTokenStore, resolveCredentialStoreAdapter, type CredentialStoreAdapter } from '../../src/storage/keychain-token-store.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
 
 class MemoryCredentialAdapter implements CredentialStoreAdapter {
@@ -81,4 +81,18 @@ describe('KeychainTokenStore', () => {
 
     await expect(store.getSession()).resolves.toBeNull();
   });
+
+  it('resolves keytar default export when imported as an ESM namespace object', async () => {
+    const adapter = new MemoryCredentialAdapter();
+    const namespaceLikeModule = {
+      default: adapter,
+      getPassword: adapter.getPassword.bind(adapter)
+    };
+
+    const resolved = resolveCredentialStoreAdapter(namespaceLikeModule);
+
+    await resolved.setPassword('svc', 'acct', 'secret');
+    await expect(resolved.getPassword('svc', 'acct')).resolves.toBe('secret');
+  });
+
 });

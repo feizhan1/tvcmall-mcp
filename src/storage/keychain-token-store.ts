@@ -1,4 +1,4 @@
-import * as keytar from 'keytar';
+import * as keytarModule from 'keytar';
 import { z } from 'zod';
 import type { StoredAuthSession, TokenStore } from './token-store.js';
 
@@ -9,7 +9,7 @@ export interface CredentialStoreAdapter {
 }
 
 export interface KeychainTokenStoreOptions {
-  adapter?: CredentialStoreAdapter;
+  adapter?: unknown;
   serviceName?: string;
   accountName?: string;
 }
@@ -30,13 +30,30 @@ const storedAuthSessionSchema = z.object({
   expiresAt: z.string().optional()
 });
 
+export function resolveCredentialStoreAdapter(adapterModule: unknown): CredentialStoreAdapter {
+  if (isCredentialStoreAdapter(adapterModule)) {
+    return adapterModule;
+  }
+
+  if (
+    adapterModule &&
+    typeof adapterModule === 'object' &&
+    'default' in adapterModule &&
+    isCredentialStoreAdapter((adapterModule as { default: unknown }).default)
+  ) {
+    return (adapterModule as { default: CredentialStoreAdapter }).default;
+  }
+
+  throw new TypeError('System credential store adapter is unavailable');
+}
+
 export class KeychainTokenStore implements TokenStore {
   private readonly adapter: CredentialStoreAdapter;
   private readonly serviceName: string;
   private readonly accountName: string;
 
   constructor(options: KeychainTokenStoreOptions = {}) {
-    this.adapter = options.adapter ?? keytar;
+    this.adapter = resolveCredentialStoreAdapter(options.adapter ?? keytarModule);
     this.serviceName = options.serviceName ?? DEFAULT_SERVICE_NAME;
     this.accountName = options.accountName ?? DEFAULT_ACCOUNT_NAME;
   }
@@ -73,4 +90,14 @@ export class KeychainTokenStore implements TokenStore {
       // Clearing local auth should be idempotent even if the system keychain is unavailable.
     }
   }
+}
+
+function isCredentialStoreAdapter(value: unknown): value is CredentialStoreAdapter {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as CredentialStoreAdapter).getPassword === 'function' &&
+    typeof (value as CredentialStoreAdapter).setPassword === 'function' &&
+    typeof (value as CredentialStoreAdapter).deletePassword === 'function'
+  );
 }
