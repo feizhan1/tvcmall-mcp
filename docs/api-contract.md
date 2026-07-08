@@ -256,6 +256,8 @@ tvcmall_export_orders
 
 ### tvcmall_export_orders
 
+当前实现使用本地假订单数据导出 CSV 文件，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。`xlsx` 目前返回 `EXPORT_FORMAT_UNSUPPORTED`，后续再接入真实 xlsx exporter。
+
 ```json
 {
   "start_date": "2026-06-01",
@@ -292,7 +294,8 @@ tvcmall_export_orders
 支持格式：
 
 ```text
-v0.1：xlsx 优先，csv 可同时支持
+当前 fake 实现：csv
+后续 v0.1 完整实现：xlsx 优先，csv 可同时支持
 ```
 
 安全限制：

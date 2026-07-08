@@ -12,6 +12,7 @@ import { FakeShippingClient } from './shipping/fake-shipping-client.js';
 import type { TrackingClient } from './tracking/tracking-client.js';
 import { FakeTrackingClient } from './tracking/fake-tracking-client.js';
 import { AuthStatusOutputSchema, createAuthStatusToolResult } from './tools/auth-status.js';
+import { ExportOrdersInputSchema, ExportOrdersOutputSchema, exportOrdersForMcp } from './tools/export-orders.js';
 import { GetOrderDetailInputSchema, ListOrdersInputSchema, ListOrdersOutputSchema, OrderDetailOutputSchema, getOrderDetailForMcp, listOrdersForMcp } from './tools/orders.js';
 import { GetProductDetailInputSchema, ProductDetailSchema, SearchProductsInputSchema, SearchProductsOutputSchema, getProductDetailForMcp, searchProductsForMcp } from './tools/products.js';
 import { EstimateShippingInputSchema, EstimateShippingOutputSchema, estimateShippingForMcp } from './tools/shipping.js';
@@ -53,6 +54,8 @@ export function createTvcMallMcpServer(options: ServerOptions = {}): McpServer {
   server.registerTool('tvcmall_get_tracking_info', { title: 'TVCMall Get Tracking Info', description: '使用假数据查询单个订单物流，后续替换为真实物流 API', inputSchema: GetTrackingInfoInputSchema, outputSchema: TrackingInfoOutputSchema }, async (input) => getTrackingInfoForMcp(input, { tokenStore, authClient, trackingClient }));
 
   server.registerTool('tvcmall_batch_get_tracking', { title: 'TVCMall Batch Get Tracking', description: '使用假数据批量查询订单物流，后续替换为真实批量物流 API', inputSchema: BatchGetTrackingInputSchema, outputSchema: BatchTrackingOutputSchema }, async (input) => batchGetTrackingForMcp(input, { tokenStore, authClient, trackingClient }));
+
+  server.registerTool('tvcmall_export_orders', { title: 'TVCMall Export Orders', description: '使用假订单数据导出 CSV 文件，xlsx 暂未实现', inputSchema: ExportOrdersInputSchema, outputSchema: ExportOrdersOutputSchema }, async (input) => exportOrdersForMcp(input, { tokenStore, authClient, orderClient }));
 
   return server;
 }
