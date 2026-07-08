@@ -57,48 +57,51 @@ npx @tvcmall/mcp login
 
 ## 4. 后端认证接口
 
-建议新增 MCP 专用授权接口，不要直接复用网页登录接口。
+当前外部登录文档见 `docs/external/登录.openapi.yaml`，其中已定义真实登录入口：
 
 ```http
-POST /api/mcp/auth/login
+POST /user/login
+Authorization: <login-api-authorization>
+Content-Type: application/json
+```
+
+refresh、logout、me 仍建议后续补充 MCP 专用授权接口：
+
+```http
 POST /api/mcp/auth/refresh
 POST /api/mcp/auth/logout
 GET  /api/mcp/auth/me
 ```
 
-### POST /api/mcp/auth/login
+### POST /user/login
 
 请求：
 
 ```json
 {
-  "username": "customer@example.com",
+  "email": "customer@example.com",
   "password": "********",
-  "device_name": "MacBook Pro",
-  "client": "tvcmall-mcp",
-  "client_version": "0.1.0"
+  "rememberme": true
 }
 ```
 
 响应：
 
+当前登录 OpenAPI 未给出明确响应字段。`HttpAuthClient` 会兼容常见 token 形态，例如 `data.token`、`data.access_token` 或顶层 `token` / `access_token`，并映射为本地 `StoredAuthSession`：
+
 ```json
 {
-  "access_token": "eyJ...",
-  "refresh_token": "rft_...",
-  "expires_in": 7200,
-  "token_type": "Bearer",
-  "customer": {
-    "id": "cus_123",
-    "email": "customer@example.com",
-    "name": "Customer Name"
-  },
-  "scopes": [
-    "products:read",
-    "orders:read",
-    "tracking:read",
-    "orders:export"
-  ]
+  "data": {
+    "token": "<access_token>",
+    "refresh_token": "<refresh_token>",
+    "expires_in": 7200,
+    "user": {
+      "customer_id": "cus_123",
+      "email": "customer@example.com",
+      "name": "Customer Name"
+    },
+    "scopes": ["products:read", "orders:read"]
+  }
 }
 ```
 
@@ -139,6 +142,7 @@ GET  /api/mcp/auth/me
 | `TVCMALL_API_BASE_URL` | `https://api.tvcmall.com` | TVCMall HTTP API base URL |
 | `TVCMALL_API_TIMEOUT_MS` | `15000` | HTTP 请求超时时间，单位毫秒；无效值回退默认值 |
 | `TVCMALL_API_ENV` | `production` | API 环境：`production`、`staging`、`sandbox`；无效值回退默认值 |
+| `TVCMALL_API_AUTHORIZATION` | 未设置 | `/user/login` 所需的 `Authorization` header；如属于敏感部署凭据，不应提交到仓库 |
 | `TVCMALL_LOG_LEVEL` | `info` | 日志级别：`silent`、`error`、`warn`、`info`、`debug`；无效值回退默认值 |
 | `TVCMALL_EXPORT_DIR` | 未设置 | 默认订单导出目录；为空时由导出逻辑自行选择安全默认目录 |
 

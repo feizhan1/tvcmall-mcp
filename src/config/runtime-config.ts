@@ -10,6 +10,7 @@ export interface TvcMallRuntimeConfig {
   apiEnv: TvcMallApiEnv;
   logLevel: TvcMallLogLevel;
   exportDir?: string;
+  apiAuthorization?: string;
 }
 
 export const DEFAULT_RUNTIME_CONFIG: TvcMallRuntimeConfig = {
@@ -25,7 +26,8 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMall
     apiTimeoutMs: readPositiveInteger(env.TVCMALL_API_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiTimeoutMs,
     apiEnv: readEnum(env.TVCMALL_API_ENV, API_ENV_VALUES) ?? DEFAULT_RUNTIME_CONFIG.apiEnv,
     logLevel: readEnum(env.TVCMALL_LOG_LEVEL, LOG_LEVEL_VALUES) ?? DEFAULT_RUNTIME_CONFIG.logLevel,
-    ...readOptionalExportDir(env.TVCMALL_EXPORT_DIR)
+    ...readOptionalValue('exportDir', env.TVCMALL_EXPORT_DIR),
+    ...readOptionalValue('apiAuthorization', env.TVCMALL_API_AUTHORIZATION)
   };
 }
 
@@ -49,7 +51,7 @@ function readEnum<T extends readonly string[]>(value: string | undefined, allowe
   return allowedValues.includes(trimmed) ? trimmed : undefined;
 }
 
-function readOptionalExportDir(value: string | undefined): Pick<TvcMallRuntimeConfig, 'exportDir'> {
-  const exportDir = readString(value);
-  return exportDir ? { exportDir } : {};
+function readOptionalValue<K extends 'exportDir' | 'apiAuthorization'>(key: K, value: string | undefined): Pick<TvcMallRuntimeConfig, K> | Record<string, never> {
+  const parsed = readString(value);
+  return parsed ? { [key]: parsed } as Pick<TvcMallRuntimeConfig, K> : {};
 }

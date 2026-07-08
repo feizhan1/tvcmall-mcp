@@ -54,10 +54,11 @@ node dist/index.js whoami
 | `TVCMALL_API_BASE_URL` | `https://api.tvcmall.com` | 真实 TVCMall API base URL |
 | `TVCMALL_API_TIMEOUT_MS` | `15000` | HTTP 请求超时时间，单位毫秒 |
 | `TVCMALL_API_ENV` | `production` | API 环境：`production`、`staging` 或 `sandbox` |
+| `TVCMALL_API_AUTHORIZATION` | 未设置 | `/user/login` 所需的 `Authorization` header，来自后端接口文档或部署配置 |
 | `TVCMALL_LOG_LEVEL` | `info` | 日志级别：`silent`、`error`、`warn`、`info`、`debug` |
 | `TVCMALL_EXPORT_DIR` | 未设置 | 默认订单导出目录 |
 
-不要把 `access_token`、`refresh_token`、密码或客户 PII 放进环境变量；用户 token 继续通过 CLI login 写入系统凭证库。
+不要把 `access_token`、`refresh_token`、密码或客户 PII 放进环境变量；用户 token 继续通过 CLI login 写入系统凭证库。`TVCMALL_API_AUTHORIZATION` 如属于敏感部署凭据，也不要提交到仓库。
 
 ## Harness 化开发
 
