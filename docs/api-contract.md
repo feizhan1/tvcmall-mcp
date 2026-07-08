@@ -159,6 +159,7 @@ GET  /api/mcp/auth/me
 | 登录 | `/user/login` | `POST` JSON body | `Authorization` 来自 `TVCMALL_API_AUTHORIZATION` |
 | 商品搜索 | `/v3/product/list/search/mapping` | `GET` query `body` JSON string | `Authorization` 来自 `session.accessToken` |
 | 商品详情 | `/v3/productdetail/detail` | `GET` query `body` JSON string | `Authorization` 来自 `session.accessToken` |
+| 商品 SKU 目的地运费估算 | `/v3/productdetail/shipping/compute` | `GET` query `body` JSON string `{sku,quantity,countrycode}` | `Authorization` 来自 `session.accessToken` |
 | 订单列表 | `/v3/user/getorders` | `POST` JSON body | `Authorization` 来自 `session.accessToken` |
 | 订单详情 | `/v3/order/detail` | `POST` query `orderId` | `Authorization` 来自 `session.accessToken` |
 | 客户积分 | `/m/user/points/stat` | `GET` | `Authorization` 来自 `session.accessToken` |
@@ -227,18 +228,18 @@ tvcmall_export_orders
 
 ### tvcmall_estimate_shipping
 
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。本 tool 面向“未下单商品 + 目的国家”的运费预估，不作为订单号运费入口；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，MCP Client 必须调用 `tvcmall_get_tracking_info`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。本 tool 面向“未下单商品 SKU + 目的国家”的运费预估，`real` 模式调用真实 `/v3/productdetail/shipping/compute`，请求 query `body` 为 JSON string：`{ "sku": "...", "quantity": 1, "countrycode": "AO" }`。它不作为订单号运费入口；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，MCP Client 必须调用 `tvcmall_get_tracking_info`。
 
 ```json
 {
-  "destination_country": "US",
+  "destination_country": "AO",
   "items": [
-    { "product_id": "prd_iphone_case_001", "quantity": 10 }
+    { "sku": "684000085E", "quantity": 1 }
   ]
 }
 ```
 
-结构化输出包含目的国家、计费重量、商品数量和多个运输选项。
+当前真实接口按单个商品 sku 估算；`product_id` 仅作为兼容输入字段保留，真实调用时会作为 `sku` fallback。结构化输出包含目的国家、计费重量、商品数量和多个运输选项。
 
 ### tvcmall_get_points
 

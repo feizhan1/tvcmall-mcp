@@ -13,6 +13,7 @@ servers:
 tags:
   - name: Auth
   - name: Products
+  - name: Shipping
   - name: Orders
   - name: Points
   - name: Logistics
@@ -82,6 +83,29 @@ paths:
       responses:
         '200':
           description: Product detail response. Source schema is empty; client maps common product fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /v3/productdetail/shipping/compute:
+    get:
+      tags: [Shipping]
+      summary: 按照商品 sku 和目的地估算运费
+      description: 按单个商品 sku、数量和目的国家/地区代码估算未下单商品运费；MCP 中映射到 tvcmall_estimate_shipping。订单号物流和订单运费查询使用 tvcmall_get_tracking_info。
+      operationId: computeProductDestinationShipping
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenAuthorizationHeader'
+        - name: body
+          in: query
+          required: false
+          schema:
+            type: string
+          description: JSON string with sku, quantity and countrycode.
+          example: '{"sku":"684000085E","quantity":1,"countrycode":"AO"}'
+      responses:
+        '200':
+          description: Product destination shipping estimate response. Source schema is empty; client maps common shipping option fields.
           content:
             application/json:
               schema:

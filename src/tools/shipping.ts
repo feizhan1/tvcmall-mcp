@@ -7,19 +7,19 @@ import { FakeShippingClient } from '../shipping/fake-shipping-client.js';
 import type { ShippingClient } from '../shipping/shipping-client.js';
 import type { TokenStore } from '../storage/token-store.js';
 
-export const EstimateShippingInputSchema = z.object({
-  order_id: z.string().trim().min(1).optional(),
-  destination_country: z.string().trim().min(2).max(2).optional(),
-  items: z.array(
-    z.object({
-      product_id: z.string().trim().min(1),
-      quantity: z.number().int().min(1).max(1000)
-    })
-  ).min(1).max(50).optional()
+const EstimateShippingItemInputSchema = z.object({
+  sku: z.string().trim().min(1).optional(),
+  product_id: z.string().trim().min(1).optional(),
+  quantity: z.number().int().min(1).max(1000)
 }).refine(
-  (input) => Boolean(input.order_id) || (Boolean(input.destination_country) && Boolean(input.items?.length)),
-  { message: '需要提供 order_id，或同时提供 destination_country 与 items' }
+  (input) => Boolean(input.sku ?? input.product_id),
+  { message: '需要提供 sku；product_id 仅作为兼容字段' }
 );
+
+export const EstimateShippingInputSchema = z.object({
+  destination_country: z.string().trim().min(2).max(2),
+  items: z.array(EstimateShippingItemInputSchema).length(1, '当前真实运费接口按单个商品 sku 估算')
+});
 
 export const EstimateShippingOutputSchema = z.object({
   destination_country: z.string(),

@@ -81,7 +81,7 @@ npx @tvcmall/mcp install claude
 - `tvcmall_auth_status`：检查当前登录状态。
 - `tvcmall_search_products`：搜索商品。
 - `tvcmall_get_product_detail`：查看商品详情。
-- `tvcmall_estimate_shipping`：估算运费。
+- `tvcmall_estimate_shipping`：按商品 SKU、数量和目的地估算未下单商品运费。
 - `tvcmall_list_orders`：查询订单列表。
 - `tvcmall_get_order_detail`：查询订单商品、金额、地址等详情。
 - `tvcmall_get_tracking_info`：查询单个订单物流和订单运费。

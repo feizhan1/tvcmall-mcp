@@ -81,7 +81,7 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_estimate_shipping',
-    { title: 'TVCMall Estimate Shipping', description: '按目的国家和商品预估未下单商品运费；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，请不要调用本工具，必须使用 tvcmall_get_tracking_info。', inputSchema: EstimateShippingInputSchema, outputSchema: EstimateShippingOutputSchema },
+    { title: 'TVCMall Estimate Shipping', description: '按商品 SKU、数量和目的国家预估未下单商品运费；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，请不要调用本工具，必须使用 tvcmall_get_tracking_info。', inputSchema: EstimateShippingInputSchema, outputSchema: EstimateShippingOutputSchema },
     async (input) => estimateShippingForMcp(input, { tokenStore, authClient, shippingClient })
   );
 

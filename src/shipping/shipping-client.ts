@@ -1,14 +1,14 @@
 import type { StoredAuthSession } from '../storage/token-store.js';
 
 export interface ShippingEstimateItem {
-  product_id: string;
+  sku?: string;
+  product_id?: string;
   quantity: number;
 }
 
 export interface ShippingEstimateInput {
-  order_id?: string;
-  destination_country?: string;
-  items?: ShippingEstimateItem[];
+  destination_country: string;
+  items: ShippingEstimateItem[];
 }
 
 export interface ShippingOption {

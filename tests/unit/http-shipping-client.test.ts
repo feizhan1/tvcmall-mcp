@@ -17,53 +17,62 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('HttpShippingClient', () => {
-  it('queries order shipping fee with the login token Authorization header', async () => {
+  it('computes product destination shipping with sku body query and login token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
-        orderId: 'V26030900012',
-        destinationCountry: 'US',
-        chargeableWeight: '1.25',
-        itemCount: 4,
-        carrier: 'DHL',
-        service: 'Express Worldwide',
-        shippingFee: '18.60',
-        currency: 'USD',
-        estimatedDays: '3-5 business days'
+        countrycode: 'AO',
+        quantity: 1,
+        chargeableWeight: '0.3',
+        logistics: [
+          {
+            shippingname: 'DHL',
+            method: 'Express Worldwide',
+            freight: '18.60',
+            deliverytime: '7-12 days'
+          }
+        ]
       }
     }));
     const client = new HttpShippingClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
 
-    const result = await client.estimateShipping({ order_id: 'V26030900012' }, session);
+    const result = await client.estimateShipping({
+      destination_country: 'AO',
+      items: [{ sku: '684000085E', quantity: 1 }]
+    }, session);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const parsedUrl = new URL(url);
-    expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/order/getlogisticstracking');
-    expect(parsedUrl.searchParams.get('orderId')).toBe('V26030900012');
+    expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/v3/productdetail/shipping/compute');
+    expect(JSON.parse(parsedUrl.searchParams.get('body') ?? '')).toEqual({
+      sku: '684000085E',
+      quantity: 1,
+      countrycode: 'AO'
+    });
     expect(init.method).toBe('GET');
     expect(init.headers).toMatchObject({ Authorization: 'login-access-token' });
     expect(result).toEqual({
-      destination_country: 'US',
+      destination_country: 'AO',
       currency: 'USD',
-      chargeable_weight_kg: 1.25,
-      item_count: 4,
+      chargeable_weight_kg: 0.3,
+      item_count: 1,
       options: [
         {
           carrier: 'DHL',
           service: 'Express Worldwide',
           estimated_cost: 18.6,
           currency: 'USD',
-          estimated_days: '3-5 business days'
+          estimated_days: '7-12 days'
         }
       ]
     });
   });
 
-  it('requires order_id because the real logistics API is order based', async () => {
+  it('requires a sku because the real product shipping API is sku based', async () => {
     const fetchMock = vi.fn();
     const client = new HttpShippingClient({ baseUrl: 'https://api.tvcmall.test', fetch: fetchMock });
 
-    await expect(client.estimateShipping({ destination_country: 'US', items: [{ product_id: 'prd_1', quantity: 1 }] }, session)).rejects.toThrow('order_id');
+    await expect(client.estimateShipping({ destination_country: 'US', items: [{ quantity: 1 }] }, session)).rejects.toThrow('sku');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -8,39 +8,41 @@ export class HttpShippingClient extends BaseHttpClient implements ShippingClient
   }
 
   async estimateShipping(input: ShippingEstimateInput, session: StoredAuthSession): Promise<ShippingEstimateResult> {
-    if (!input.order_id) {
-      throw new Error('HTTP logistics shipping query requires order_id');
-    }
+    const item = input.items[0];
+    const sku = item?.sku ?? item?.product_id;
+    if (!sku) throw new Error('HTTP product shipping estimate requires sku');
 
-    const response = await this.fetchImpl(this.createUrl('/order/getlogisticstracking', { orderId: input.order_id }), {
+    const countryCode = input.destination_country.toUpperCase();
+    const body = JSON.stringify({ sku, quantity: item.quantity, countrycode: countryCode });
+    const response = await this.fetchImpl(this.createUrl('/v3/productdetail/shipping/compute', { body }), {
       method: 'GET',
       headers: this.authHeaders(session)
     });
-    const payload = unwrapPayload(await this.readJson(response, 'TVCMall logistics shipping'));
+    const payload = unwrapPayload(await this.readJson(response, 'TVCMall product shipping estimate'));
     const options = mapShippingOptions(payload);
 
     return {
-      destination_country: readString(payload, ['destination_country', 'destinationCountry', 'country'], input.destination_country ?? 'UNKNOWN').toUpperCase(),
+      destination_country: readString(payload, ['destination_country', 'destinationCountry', 'countrycode', 'countryCode', 'country'], countryCode).toUpperCase(),
       currency: 'USD',
       chargeable_weight_kg: readNumber(payload, ['chargeable_weight_kg', 'chargeableWeight', 'weight', 'weightKg']),
-      item_count: readInteger(payload, ['item_count', 'itemCount', 'quantity'], input.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0),
+      item_count: readInteger(payload, ['item_count', 'itemCount', 'quantity'], item.quantity),
       options
     };
   }
 }
 
 function mapShippingOptions(source: JsonObject): ShippingOption[] {
-  const rawOptions = firstArray(source, ['options', 'shippingOptions', 'logistics', 'methods']);
+  const rawOptions = firstArray(source, ['options', 'shippingOptions', 'shippingMethods', 'logistics', 'methods', 'items', 'list']);
   if (rawOptions.length > 0) return rawOptions.map(mapShippingOption);
   return [mapShippingOption(source)];
 }
 
 function mapShippingOption(source: JsonObject): ShippingOption {
   return {
-    carrier: readString(source, ['carrier', 'logisticsName', 'shippingName', 'expressName'], 'Unknown'),
-    service: readString(source, ['service', 'serviceName', 'shippingMethod', 'method'], 'Logistics Tracking'),
-    estimated_cost: readNumber(source, ['estimated_cost', 'estimatedCost', 'shippingFee', 'freight', 'price', 'cost']),
+    carrier: readString(source, ['carrier', 'logisticsName', 'shippingName', 'shippingname', 'expressName', 'name'], 'Unknown'),
+    service: readString(source, ['service', 'serviceName', 'shippingMethod', 'method', 'shippingName', 'shippingname', 'logisticsName'], 'Product Shipping Estimate'),
+    estimated_cost: readNumber(source, ['estimated_cost', 'estimatedCost', 'shippingFee', 'freight', 'freightAmount', 'price', 'cost', 'fee', 'amount']),
     currency: 'USD',
-    estimated_days: readString(source, ['estimated_days', 'estimatedDays', 'deliveryTime', 'days'], 'unknown')
+    estimated_days: readString(source, ['estimated_days', 'estimatedDays', 'deliveryTime', 'deliverytime', 'timeLimit', 'days'], 'unknown')
   };
 }

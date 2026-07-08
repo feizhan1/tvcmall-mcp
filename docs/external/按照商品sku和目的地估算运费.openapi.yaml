@@ -1,0 +1,44 @@
+openapi: 3.0.1
+info:
+  title: 默认模块
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /v3/productdetail/shipping/compute:
+    get:
+      summary: 按照商品 sku 和目的地估算运费
+      deprecated: false
+      description: '按单个商品 sku、数量和目的国家/地区代码估算未下单商品运费。MCP 中应映射到 tvcmall_estimate_shipping；订单号物流和订单运费查询应使用 tvcmall_get_tracking_info。'
+      tags: []
+      parameters:
+        - name: body
+          in: query
+          description: ''
+          required: false
+          example: '{"sku":"684000085E","quantity":1,"countrycode":"AO"}'
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          description: 登录后获取的 access token，HTTP 请求头需直接设置为该 token。
+          example: login-access-token-example
+          schema:
+            type: string
+            default: login-access-token-example
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+          headers: {}
+      security: []
+components:
+  schemas: {}
+  responses: {}
+  securitySchemes: {}
+servers: []
+security: []

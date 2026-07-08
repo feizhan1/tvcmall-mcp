@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimateShippingForMcp } from '../../src/tools/shipping.js';
+import { EstimateShippingInputSchema, estimateShippingForMcp } from '../../src/tools/shipping.js';
 import { FakeAuthClient } from '../../src/auth/fake-auth-client.js';
 import { FakeShippingClient } from '../../src/shipping/fake-shipping-client.js';
 import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
@@ -32,7 +32,7 @@ const activeSession: StoredAuthSession = {
 describe('estimateShippingForMcp', () => {
   it('returns AUTH_REQUIRED when no session exists', async () => {
     const result = await estimateShippingForMcp(
-      { destination_country: 'US', items: [{ product_id: 'prd_iphone_case_001', quantity: 10 }] },
+      { destination_country: 'US', items: [{ sku: 'TVC-IP15-CASE-CLEAR', quantity: 10 }] },
       { tokenStore: new MemoryTokenStore(null), authClient: new FakeAuthClient(), shippingClient: new FakeShippingClient() }
     );
 
@@ -42,7 +42,7 @@ describe('estimateShippingForMcp', () => {
 
   it('returns fake shipping options without token values', async () => {
     const result = await estimateShippingForMcp(
-      { destination_country: 'US', items: [{ product_id: 'prd_iphone_case_001', quantity: 10 }] },
+      { destination_country: 'US', items: [{ sku: 'TVC-IP15-CASE-CLEAR', quantity: 10 }] },
       {
         tokenStore: new MemoryTokenStore(activeSession),
         authClient: new FakeAuthClient(),
@@ -62,5 +62,17 @@ describe('estimateShippingForMcp', () => {
     });
     expect(JSON.stringify(result)).not.toContain('fake-access-token');
     expect(JSON.stringify(result)).not.toContain('fake-refresh-token');
+  });
+
+  it('accepts sku based product shipping input and rejects order_id only input', () => {
+    expect(EstimateShippingInputSchema.parse({
+      destination_country: 'AO',
+      items: [{ sku: '684000085E', quantity: 1 }]
+    })).toEqual({
+      destination_country: 'AO',
+      items: [{ sku: '684000085E', quantity: 1 }]
+    });
+
+    expect(() => EstimateShippingInputSchema.parse({ order_id: 'V24011000008' })).toThrow('destination_country');
   });
 });
