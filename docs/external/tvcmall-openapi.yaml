@@ -15,6 +15,7 @@ tags:
   - name: Products
   - name: Orders
   - name: Points
+  - name: Logistics
 security: []
 paths:
   /user/login:
@@ -129,6 +130,27 @@ paths:
       responses:
         '200':
           description: Order detail response. Source schema is empty; client maps common order fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /order/getlogisticstracking:
+    get:
+      tags: [Logistics]
+      summary: 物流和运费查询
+      operationId: getLogisticsTracking
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenAuthorizationHeader'
+        - name: orderId
+          in: query
+          required: false
+          schema:
+            type: string
+          example: V26030900012
+      responses:
+        '200':
+          description: Logistics tracking and shipping fee response. Source schema is empty; clients map common logistics, tracking and shipping fields.
           content:
             application/json:
               schema:

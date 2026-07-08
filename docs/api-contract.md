@@ -162,6 +162,7 @@ GET  /api/mcp/auth/me
 | 订单详情 | `/v3/order/detail` | `POST` query `orderId` | `Authorization` 来自 `session.accessToken` |
 | 客户积分 | `/m/user/points/stat` | `GET` | `Authorization` 来自 `session.accessToken` |
 | 积分记录 | `/v3/user/points/list` | `GET` query `pageindex/pagesize` | `Authorization` 来自 `session.accessToken` |
+| 物流和订单运费 | `/order/getlogisticstracking` | `GET` query `orderId` | `Authorization` 来自 `session.accessToken` |
 
 ## 7. MCP Tools
 
@@ -225,14 +226,11 @@ tvcmall_export_orders
 
 ### tvcmall_estimate_shipping
 
-当前实现使用本地假运费规则，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。后续替换为真实 `/api/mcp/shipping/estimate`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。`fake` 模式支持按目的国家和商品估算运费；`real` 模式调用真实 `/order/getlogisticstracking`，需要提供 `order_id` 查询订单运费。
 
 ```json
 {
-  "destination_country": "US",
-  "items": [
-    { "product_id": "prd_iphone_case_001", "quantity": 10 }
-  ]
+  "order_id": "V26030900012"
 }
 ```
 

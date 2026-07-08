@@ -6,8 +6,9 @@ export interface ShippingEstimateItem {
 }
 
 export interface ShippingEstimateInput {
-  destination_country: string;
-  items: ShippingEstimateItem[];
+  order_id?: string;
+  destination_country?: string;
+  items?: ShippingEstimateItem[];
 }
 
 export interface ShippingOption {

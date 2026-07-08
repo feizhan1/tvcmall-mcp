@@ -7,6 +7,10 @@ import { HttpOrderClient } from '../../src/orders/http-order-client.js';
 import { FakePointsClient } from '../../src/points/fake-points-client.js';
 import { HttpPointsClient } from '../../src/points/http-points-client.js';
 import { FakeProductClient } from '../../src/products/fake-product-client.js';
+import { FakeShippingClient } from '../../src/shipping/fake-shipping-client.js';
+import { HttpShippingClient } from '../../src/shipping/http-shipping-client.js';
+import { FakeTrackingClient } from '../../src/tracking/fake-tracking-client.js';
+import { HttpTrackingClient } from '../../src/tracking/http-tracking-client.js';
 import { HttpProductClient } from '../../src/products/http-product-client.js';
 
 describe('createTvcMallClients', () => {
@@ -23,6 +27,8 @@ describe('createTvcMallClients', () => {
     expect(clients.productClient).toBeInstanceOf(FakeProductClient);
     expect(clients.orderClient).toBeInstanceOf(FakeOrderClient);
     expect(clients.pointsClient).toBeInstanceOf(FakePointsClient);
+    expect(clients.shippingClient).toBeInstanceOf(FakeShippingClient);
+    expect(clients.trackingClient).toBeInstanceOf(FakeTrackingClient);
   });
 
   it('uses HTTP clients when TVCMall data source is real', () => {
@@ -38,5 +44,7 @@ describe('createTvcMallClients', () => {
     expect(clients.productClient).toBeInstanceOf(HttpProductClient);
     expect(clients.orderClient).toBeInstanceOf(HttpOrderClient);
     expect(clients.pointsClient).toBeInstanceOf(HttpPointsClient);
+    expect(clients.shippingClient).toBeInstanceOf(HttpShippingClient);
+    expect(clients.trackingClient).toBeInstanceOf(HttpTrackingClient);
   });
 });

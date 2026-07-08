@@ -14,8 +14,10 @@ import { FakeProductClient } from '../products/fake-product-client.js';
 import { HttpProductClient } from '../products/http-product-client.js';
 import type { ShippingClient } from '../shipping/shipping-client.js';
 import { FakeShippingClient } from '../shipping/fake-shipping-client.js';
+import { HttpShippingClient } from '../shipping/http-shipping-client.js';
 import type { TrackingClient } from '../tracking/tracking-client.js';
 import { FakeTrackingClient } from '../tracking/fake-tracking-client.js';
+import { HttpTrackingClient } from '../tracking/http-tracking-client.js';
 
 export interface TvcMallClients {
   authClient: AuthClient;
@@ -32,9 +34,9 @@ export function createTvcMallClients(config: TvcMallRuntimeConfig = loadRuntimeC
       authClient: new HttpAuthClient({ baseUrl: config.apiBaseUrl, authorization: config.apiAuthorization }),
       productClient: new HttpProductClient({ baseUrl: config.apiBaseUrl }),
       pointsClient: new HttpPointsClient({ baseUrl: config.apiBaseUrl }),
-      shippingClient: new FakeShippingClient(),
+      shippingClient: new HttpShippingClient({ baseUrl: config.apiBaseUrl }),
       orderClient: new HttpOrderClient({ baseUrl: config.apiBaseUrl }),
-      trackingClient: new FakeTrackingClient()
+      trackingClient: new HttpTrackingClient({ baseUrl: config.apiBaseUrl })
     };
   }
 

@@ -8,14 +8,18 @@ import type { ShippingClient } from '../shipping/shipping-client.js';
 import type { TokenStore } from '../storage/token-store.js';
 
 export const EstimateShippingInputSchema = z.object({
-  destination_country: z.string().trim().min(2).max(2),
+  order_id: z.string().trim().min(1).optional(),
+  destination_country: z.string().trim().min(2).max(2).optional(),
   items: z.array(
     z.object({
       product_id: z.string().trim().min(1),
       quantity: z.number().int().min(1).max(1000)
     })
-  ).min(1).max(50)
-});
+  ).min(1).max(50).optional()
+}).refine(
+  (input) => Boolean(input.order_id) || (Boolean(input.destination_country) && Boolean(input.items?.length)),
+  { message: '需要提供 order_id，或同时提供 destination_country 与 items' }
+);
 
 export const EstimateShippingOutputSchema = z.object({
   destination_country: z.string(),

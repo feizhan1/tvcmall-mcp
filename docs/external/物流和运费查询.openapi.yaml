@@ -1,0 +1,44 @@
+openapi: 3.0.1
+info:
+  title: 默认模块
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /order/getlogisticstracking:
+    get:
+      summary: 运费查询
+      deprecated: false
+      description: ''
+      tags: []
+      parameters:
+        - name: orderId
+          in: query
+          description: ''
+          required: false
+          example: V26030900012
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          description: ''
+          example: login-access-token-example
+          schema:
+            type: string
+            default: login-access-token-example
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+          headers: {}
+      security: []
+components:
+  schemas: {}
+  responses: {}
+  securitySchemes: {}
+servers: []
+security: []

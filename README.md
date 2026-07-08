@@ -60,7 +60,7 @@ node dist/index.js whoami
 | `TVCMALL_LOG_LEVEL` | `info` | 日志级别：`silent`、`error`、`warn`、`info`、`debug` |
 | `TVCMALL_EXPORT_DIR` | 未设置 | 默认订单导出目录 |
 
-不要把 `access_token`、`refresh_token`、密码或客户 PII 放进环境变量；用户 token 继续通过 CLI login 写入系统凭证库。`TVCMALL_API_AUTHORIZATION` 只用于登录接口，如属于敏感部署凭据，也不要提交到仓库。真实数据模式下，商品、订单、积分 API 的 `Authorization` header 来自登录后保存的 `session.accessToken`。
+不要把 `access_token`、`refresh_token`、密码或客户 PII 放进环境变量；用户 token 继续通过 CLI login 写入系统凭证库。`TVCMALL_API_AUTHORIZATION` 只用于登录接口，如属于敏感部署凭据，也不要提交到仓库。真实数据模式下，商品、订单、积分、物流和运费 API 的 `Authorization` header 来自登录后保存的 `session.accessToken`。
 
 ## Harness 化开发
 
