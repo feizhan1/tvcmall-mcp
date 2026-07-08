@@ -1,0 +1,121 @@
+{
+  "data": {
+    "packages": [
+      {
+        "TrackingNumber": "YT2430621266059602",
+        "CourierNumber": "dhl",
+        "updateddate": "2025-11-24 06:52:05",
+        "TrackingInfo": {
+          "message": "ok",
+          "nu": "YT2430621266059602",
+          "ischeck": "1",
+          "condition": "F00",
+          "com": "yuntrack",
+          "status": "200",
+          "state": "3",
+          "data": [
+            {
+              "time": "2024-11-17 17:31:07",
+              "ftime": "2024-11-17 17:31:07",
+              "context": "Delivered"
+            },
+            {
+              "time": "2024-11-12 10:45:24",
+              "ftime": "2024-11-12 10:45:24",
+              "context": "The shipment is being brought to [PACKSTATION 701 Karl-Freyberg-Str. 12 99441 Magdala].The earliest time when it can be picked up can be found on the notification card."
+            },
+            {
+              "time": "2024-11-12 10:42:16",
+              "ftime": "2024-11-12 10:42:16",
+              "context": "Consignee notified - Ready for collection-Packstation"
+            },
+            {
+              "time": "2024-11-12 08:29:34",
+              "ftime": "2024-11-12 08:29:34",
+              "context": "In delivery process"
+            },
+            {
+              "time": "2024-11-12 05:54:05",
+              "ftime": "2024-11-12 05:54:05",
+              "context": "Sorted"
+            },
+            {
+              "time": "2024-11-09 07:24:17",
+              "ftime": "2024-11-09 07:24:17",
+              "context": "Sorted"
+            },
+            {
+              "time": "2024-11-08 22:06:26",
+              "ftime": "2024-11-08 22:06:26",
+              "context": "Delivered to local carrier"
+            },
+            {
+              "time": "2024-11-08 17:06:43",
+              "ftime": "2024-11-08 17:06:43",
+              "context": "[LIEGE, AVALON, BE]Departed from facility"
+            },
+            {
+              "time": "2024-11-08 15:18:49",
+              "ftime": "2024-11-08 15:18:49",
+              "context": "[LIEGE, AVALON, BE]Arrived at sort facility"
+            },
+            {
+              "time": "2024-11-08 14:53:00",
+              "ftime": "2024-11-08 14:53:00",
+              "context": "[LIEGE, LIEGE, BE]Clearance processing completed - Import"
+            },
+            {
+              "time": "2024-11-08 13:48:05",
+              "ftime": "2024-11-08 13:48:05",
+              "context": "In clearance processing - Import"
+            },
+            {
+              "time": "2024-11-07 08:06:00",
+              "ftime": "2024-11-07 08:06:00",
+              "context": "[BE]International flight has arrived"
+            },
+            {
+              "time": "2024-11-05 20:25:00",
+              "ftime": "2024-11-05 20:25:00",
+              "context": "International flight has departed"
+            },
+            {
+              "time": "2024-11-05 03:32:17",
+              "ftime": "2024-11-05 03:32:17",
+              "context": "[Mainland China, CN]Arrived at the origin international airport"
+            },
+            {
+              "time": "2024-11-04 17:32:48",
+              "ftime": "2024-11-04 17:32:48",
+              "context": "[Mainland China, CN]Shipment is in transit to next facility"
+            },
+            {
+              "time": "2024-11-03 19:00:04",
+              "ftime": "2024-11-03 19:00:04",
+              "context": "Shipment in transit to DHL"
+            },
+            {
+              "time": "2024-11-03 05:48:23",
+              "ftime": "2024-11-03 05:48:23",
+              "context": "[Mainland China, CN]Departed from sort facility"
+            },
+            {
+              "time": "2024-11-02 21:09:38",
+              "ftime": "2024-11-02 21:09:38",
+              "context": "[Mainland China, CN]Arrived at origin facility"
+            },
+            {
+              "time": "2024-11-01 17:43:18",
+              "ftime": "2024-11-01 17:43:18",
+              "context": "Shipment information received"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "code": 200,
+  "message": "",
+  "success": true,
+  "detailcode": ""
+}

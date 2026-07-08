@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { HttpTrackingClient } from '../../src/tracking/http-tracking-client.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
 
@@ -12,6 +13,13 @@ const session: StoredAuthSession = {
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+function sampleResponse(name: string): Response {
+  return new Response(readFileSync(new URL(`../../docs/external/api-responses/${name}`, import.meta.url), 'utf8'), {
+    status: 200,
     headers: { 'content-type': 'application/json' }
   });
 }
@@ -161,5 +169,21 @@ describe('HttpTrackingClient', () => {
     const result = await client.getTrackingInfo('V10001', session);
 
     expect(result).toBeNull();
+  });
+
+  it('maps the real logistics tracking response sample file', async () => {
+    const fetchMock = vi.fn(async () => sampleResponse('查询订单的物流和运费api.json'));
+    const client = new HttpTrackingClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const result = await client.getTrackingInfo('V26030900012', session);
+
+    expect(result).toMatchObject({
+      order_id: 'V26030900012',
+      carrier: 'dhl',
+      tracking_number: 'YT2430621266059602',
+      status: 'delivered'
+    });
+    expect(result?.events).toHaveLength(19);
+    expect(result?.events[0].status).toBeTruthy();
   });
 });

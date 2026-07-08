@@ -181,7 +181,7 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
-  /m/user/points/stat:
+  /v3/user/points/stat:
     get:
       tags: [Points]
       summary: 个人中心-积分

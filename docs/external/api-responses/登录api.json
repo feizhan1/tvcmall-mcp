@@ -1,0 +1,14 @@
+{
+  "data": {
+    "success": true,
+    "reason": "",
+    "errorcount": 0,
+    "islock": false,
+    "token": "sample-access-token",
+    "guesttoken": null
+  },
+  "code": 200,
+  "message": "",
+  "success": true,
+  "detailcode": "T00000"
+}

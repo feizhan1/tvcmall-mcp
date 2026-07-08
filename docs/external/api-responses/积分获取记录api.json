@@ -1,0 +1,48 @@
+{
+  "data": {
+    "Total": 3,
+    "Points": [
+      {
+        "ID": 3786,
+        "UserID": "sample-user-id",
+        "Value": 80,
+        "Type": "ThAnniversaryPrize",
+        "Message": "18th Anniversary Prize Wheel: Earned 80 points",
+        "OrderID": "18,80",
+        "CreateTime": "06/25/2026",
+        "StayDate": "2026-06-25 11:18:42",
+        "ExpireTime": "06/24/2027",
+        "PointsType": 1
+      },
+      {
+        "ID": 3771,
+        "UserID": "sample-user-id",
+        "Value": 80,
+        "Type": "ThAnniversaryPrize",
+        "Message": "18th Anniversary Prize Wheel: Earned 80 points",
+        "OrderID": "18,80",
+        "CreateTime": "06/23/2026",
+        "StayDate": "2026-06-23 07:16:20",
+        "ExpireTime": "06/22/2027",
+        "PointsType": 1
+      },
+      {
+        "ID": 3609,
+        "UserID": "sample-user-id",
+        "Value": 5,
+        "Type": "ImproveProfile",
+        "Message": "5 points for completing my profile",
+        "OrderID": "",
+        "CreateTime": "03/13/2026",
+        "StayDate": "2026-03-13 04:01:15",
+        "ExpireTime": "03/12/2027",
+        "PointsType": 1
+      }
+    ]
+  },
+  "code": 200,
+  "message": "",
+  "success": true,
+  "detailcode": "T00000",
+  "statusmodelflag": null
+}

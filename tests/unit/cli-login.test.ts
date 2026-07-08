@@ -59,7 +59,7 @@ describe('login command with fake data', () => {
     const tokenStore = new MemoryTokenStore();
     const stdout = new StringOutput();
 
-    await runCli(['login'], { tokenStore, stdout });
+    await runCli(['login'], { tokenStore, stdout, env: { TVCMALL_DATA_SOURCE: 'fake' } });
 
     expect(tokenStore.session).toMatchObject({
       customer: {
@@ -82,9 +82,9 @@ describe('login command with fake data', () => {
     const tokenStore = new MemoryTokenStore();
     const stdout = new StringOutput();
 
-    await runCli(['login'], { tokenStore, stdout });
+    await runCli(['login'], { tokenStore, stdout, env: { TVCMALL_DATA_SOURCE: 'fake' } });
     stdout.value = '';
-    await runCli(['whoami'], { tokenStore, stdout });
+    await runCli(['whoami'], { tokenStore, stdout, env: { TVCMALL_DATA_SOURCE: 'fake' } });
 
     expect(stdout.value).toContain('fake.customer@example.com');
     expect(stdout.value).toContain('products:read');

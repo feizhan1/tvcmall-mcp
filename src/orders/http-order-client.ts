@@ -20,12 +20,13 @@ export class HttpOrderClient extends BaseHttpClient implements OrderClient {
       })
     });
     const payload = unwrapPayload(await this.readJson(response, 'TVCMall order list'));
-    const items = firstArray(payload, ['items', 'list', 'orders', 'records']).map(mapOrderSummary);
+    const listSource = firstObject(payload, ['model']) ?? payload;
+    const items = firstArray(listSource, ['items', 'list', 'orders', 'records']).map(mapOrderSummary);
 
     return {
       page: input.page,
       page_size: input.page_size,
-      total: readInteger(payload, ['total', 'totalCount', 'count', 'records'], items.length),
+      total: readInteger(listSource, ['total', 'totalCount', 'count', 'records'], items.length),
       items
     };
   }
@@ -45,9 +46,9 @@ export class HttpOrderClient extends BaseHttpClient implements OrderClient {
 function mapOrderSummary(source: JsonObject): OrderSummary {
   return {
     id: readString(source, ['id', 'order_id', 'orderId', 'orderNo']),
-    status: mapOrderStatus(readString(source, ['status', 'orderStatus'])),
-    created_at: readString(source, ['created_at', 'createTime', 'createdAt', 'orderTime']),
-    item_count: readInteger(source, ['item_count', 'itemCount', 'qty', 'quantity'], 0),
+    status: readOrderStatus(source),
+    created_at: readString(source, ['created_at', 'createTime', 'createdAt', 'createdOn', 'orderTime']),
+    item_count: readInteger(source, ['item_count', 'itemCount', 'totalQuantity', 'totalItems', 'qty', 'quantity'], 0),
     total_amount: readNumber(source, ['total_amount', 'totalAmount', 'orderAmount', 'grandTotal', 'amount']),
     currency: 'USD'
   };
@@ -65,13 +66,13 @@ function mapOrderDetail(source: JsonObject): OrderDetail {
     ...summary,
     items,
     shipping_address: {
-      country: readString(address, ['country', 'countryCode']),
+      country: readString(address, ['country', 'countryName', 'countryCode']),
       city: readString(address, ['city']),
       masked_postcode: maskPostcode(readString(address, ['masked_postcode', 'postcode', 'zip', 'postalCode']))
     },
     totals: {
-      subtotal: readNumber(source, ['subtotal', 'subTotal', 'goodsAmount']),
-      shipping: readNumber(source, ['shipping', 'shippingFee', 'freight']),
+      subtotal: readNumber(source, ['subtotal', 'subTotal', 'goodsAmount', 'discountedAmount', 'originalAmount']),
+      shipping: readNumber(source, ['shipping', 'shippingFee', 'shippingCost', 'freight', 'freightFee']),
       grand_total: readNumber(source, ['grand_total', 'grandTotal', 'totalAmount', 'orderAmount']),
       currency: 'USD'
     }
@@ -80,7 +81,7 @@ function mapOrderDetail(source: JsonObject): OrderDetail {
 
 function mapOrderItem(source: JsonObject): OrderItem {
   return {
-    product_id: readString(source, ['product_id', 'productId', 'id']),
+    product_id: readString(source, ['product_id', 'productId', 'productSku', 'sku', 'id']),
     sku: readString(source, ['sku', 'skuCode']),
     title: readString(source, ['title', 'name', 'productName']),
     quantity: readInteger(source, ['quantity', 'qty', 'count'], 1),
@@ -89,14 +90,33 @@ function mapOrderItem(source: JsonObject): OrderItem {
   };
 }
 
-function mapOrderStatus(value: string): OrderStatus {
+function readOrderStatus(source: JsonObject): OrderStatus {
+  const nestedStatus = firstObject(source, ['orderStatus']);
+  const candidates = [
+    readString(source, ['displayStatus']),
+    readString(source, ['groupingStatus']),
+    nestedStatus ? readString(nestedStatus, ['displayStatus']) : '',
+    nestedStatus ? readString(nestedStatus, ['groupingStatus']) : '',
+    readString(source, ['status', 'orderStatus']),
+    nestedStatus ? readString(nestedStatus, ['internalStatus']) : ''
+  ];
+
+  for (const candidate of candidates) {
+    const status = mapOrderStatus(candidate);
+    if (status) return status;
+  }
+  return 'processing';
+}
+
+function mapOrderStatus(value: string): OrderStatus | undefined {
   const normalized = value.toLowerCase();
+  if (!normalized) return undefined;
   if (normalized.includes('deliver')) return 'delivered';
   if (normalized.includes('ship')) return 'shipped';
   if (normalized.includes('cancel')) return 'cancelled';
   if (normalized.includes('process')) return 'processing';
   if (normalized.includes('pend')) return 'pending';
-  return 'processing';
+  return undefined;
 }
 
 function maskPostcode(postcode: string): string {

@@ -17,11 +17,11 @@ export interface TvcMallRuntimeConfig {
 }
 
 export const DEFAULT_RUNTIME_CONFIG: TvcMallRuntimeConfig = {
-  apiBaseUrl: 'https://api.tvcmall.com',
+  apiBaseUrl: 'http://192.168.1.16:8084/api/m',
   apiTimeoutMs: 15000,
   apiEnv: 'production',
   logLevel: 'info',
-  dataSource: 'fake'
+  dataSource: 'real'
 };
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMallRuntimeConfig {

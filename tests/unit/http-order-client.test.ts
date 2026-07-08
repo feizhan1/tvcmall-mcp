@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { HttpOrderClient } from '../../src/orders/http-order-client.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
 
@@ -12,6 +13,13 @@ const session: StoredAuthSession = {
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+function sampleResponse(name: string): Response {
+  return new Response(readFileSync(new URL(`../../docs/external/api-responses/${name}`, import.meta.url), 'utf8'), {
+    status: 200,
     headers: { 'content-type': 'application/json' }
   });
 }
@@ -105,6 +113,52 @@ describe('HttpOrderClient', () => {
       ],
       shipping_address: { country: 'US', city: 'Los Angeles', masked_postcode: '90***' },
       totals: { subtotal: 12.5, shipping: 37, grand_total: 49.5, currency: 'USD' }
+    });
+  });
+
+  it('maps the real order list response sample', async () => {
+    const fetchMock = vi.fn(async () => sampleResponse('订单列表api.json'));
+    const client = new HttpOrderClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const result = await client.listOrders({ page: 1, page_size: 10 }, session);
+
+    expect(result.total).toBe(1545);
+    expect(result.items).toHaveLength(10);
+    expect(result.items[0]).toEqual({
+      id: 'V26041400008',
+      status: 'pending',
+      created_at: '2026-04-14 03:34:59',
+      item_count: 5,
+      total_amount: 6.68,
+      currency: 'USD'
+    });
+  });
+
+  it('maps the real order detail response sample', async () => {
+    const fetchMock = vi.fn(async () => sampleResponse('订单详情api.json'));
+    const client = new HttpOrderClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const detail = await client.getOrderDetail('V26041400008', session);
+
+    expect(detail).toEqual({
+      id: 'V26041400008',
+      status: 'pending',
+      created_at: '2026-04-14 03:34:59',
+      item_count: 5,
+      total_amount: 6.68,
+      currency: 'USD',
+      items: expect.arrayContaining([
+        {
+          product_id: '661100432A',
+          sku: '661100432A',
+          title: 'Bulk Purchasing DUX DUCIS For Samsung Galaxy S4 mini  Sunflower Pattern Stand Cover with Hand Strap - Red',
+          quantity: 1,
+          unit_price: 4.29,
+          currency: 'USD'
+        }
+      ]),
+      shipping_address: { country: 'Turkey', city: 'Sample City', masked_postcode: '12***' },
+      totals: { subtotal: 6.17, shipping: 0, grand_total: 6.68, currency: 'USD' }
     });
   });
 });

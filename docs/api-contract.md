@@ -162,7 +162,7 @@ GET  /api/mcp/auth/me
 | 商品 SKU 目的地运费估算 | `/v3/productdetail/shipping/compute` | `GET` query `body` JSON string `{sku,quantity,countrycode}` | `Authorization` 来自 `session.accessToken` |
 | 订单列表 | `/v3/user/getorders` | `POST` JSON body | `Authorization` 来自 `session.accessToken` |
 | 订单详情 | `/v3/order/detail` | `POST` query `orderId` | `Authorization` 来自 `session.accessToken` |
-| 客户积分 | `/m/user/points/stat` | `GET` | `Authorization` 来自 `session.accessToken` |
+| 客户积分 | `/v3/user/points/stat` | `GET` | `Authorization` 来自 `session.accessToken` |
 | 积分记录 | `/v3/user/points/list` | `GET` query `pageindex/pagesize` | `Authorization` 来自 `session.accessToken` |
 | 物流和订单运费 | `/order/getlogisticstracking` | `GET` query `orderId` | `Authorization` 来自 `session.accessToken` |
 
@@ -228,22 +228,75 @@ tvcmall_export_orders
 
 ### tvcmall_estimate_shipping
 
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。本 tool 面向“未下单商品 SKU + 目的国家”的运费预估，`real` 模式调用真实 `/v3/productdetail/shipping/compute`，请求 query `body` 为 JSON string：`{ "sku": "...", "quantity": 1, "countrycode": "AO" }`。它不作为订单号运费入口；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，MCP Client 必须调用 `tvcmall_get_tracking_info`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。本 tool 面向“未下单商品 SKU + 目的国家/地区代码”的运费预估，入参与真实 `/v3/productdetail/shipping/compute` 对齐为 `sku`、`quantity`、`countrycode`；`real` 模式请求 query `body` 为 JSON string：`{ "sku": "...", "quantity": 1, "countrycode": "AO" }`。它不作为订单号运费入口；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，MCP Client 必须调用 `tvcmall_get_tracking_info`。
+
+```json
+{
+  "sku": "684000085E",
+  "quantity": 1,
+  "countrycode": "AO"
+}
+```
+
+当前真实接口按单个商品 sku 估算。结构化输出包含目的国家/地区代码、国家/地区名称、币种、重量、商品数量和多个运输选项。真实 `/v3/productdetail/shipping/compute` 返回的 `ShippingMethods`、`Currency`、`DisplayWeight`、`DisplayVolumeWeight`、`Weight`、`VolumeWeight`、`ParamCountryCode`、`ClientCountryCode`、`GrossWeight`、`GrossVolumeWeight` 等字段会映射为 snake_case 白名单字段；不会原样透出完整后端响应。
 
 ```json
 {
   "destination_country": "AO",
-  "items": [
-    { "sku": "684000085E", "quantity": 1 }
+  "country_name": "Angola",
+  "currency": "USD",
+  "currency_details": {
+    "code": "USD",
+    "name": "USD",
+    "format_string": "${0:N2}",
+    "format2_string": "USD{0:0.00}",
+    "format3_string": "USD-${0:0.00}",
+    "symbol": "$ - USD",
+    "symbol2": "USD",
+    "symbol3": "USD - $"
+  },
+  "chargeable_weight_kg": 0.017,
+  "display_weight": 0.017,
+  "display_volume_weight": 0.052,
+  "weight": 0.015,
+  "volume_weight": 0.047,
+  "item_count": 1,
+  "param_country_code": "AO",
+  "client_country_code": "AO",
+  "gross_weight": 0,
+  "gross_volume_weight": 0,
+  "options": [
+    {
+      "carrier": "China Post",
+      "service": "China Post",
+      "estimated_cost": 3.54,
+      "currency": "USD",
+      "estimated_days": "15-35 business days",
+      "shipping_method": "China Post",
+      "shipping_method_code": "CNP",
+      "shipping_method_name": "China Post",
+      "shipping_agent_id": 66,
+      "selected": true,
+      "shipping_cost": 3.54,
+      "shipping_cost_format": "$3.54",
+      "delivery_cycle": "15-35 business days",
+      "compute_weight": 0.0447046875,
+      "freight_fee": 0,
+      "freight_fee_format": "$0.00",
+      "logo": "/images/shippingmethods/CNP.jpg",
+      "shipping_type": 1,
+      "mobile_img_host": null,
+      "tariff": 0,
+      "original_shipping_cost": 3.54,
+      "original_shipping_cost_format": "$3.54"
+    }
   ]
 }
 ```
 
-当前真实接口按单个商品 sku 估算；`product_id` 仅作为兼容输入字段保留，真实调用时会作为 `sku` fallback。结构化输出包含目的国家、计费重量、商品数量和多个运输选项。
-
 ### tvcmall_get_points
 
-当前实现可在 `TVCMALL_DATA_SOURCE=fake` 下返回本地积分假数据；`real` 模式下调用真实 `GET /m/user/points/stat`，请求头 `Authorization` 使用登录后保存的 access token。
+当前实现可在 `TVCMALL_DATA_SOURCE=fake` 下返回本地积分假数据；`real` 模式下调用真实 `GET /v3/user/points/stat`，请求头 `Authorization` 使用登录后保存的 access token。
 
 ```json
 {}

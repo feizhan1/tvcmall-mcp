@@ -25,13 +25,14 @@ export class HttpProductClient extends BaseHttpClient implements ProductClient {
       headers: this.authHeaders(session)
     });
     const payload = unwrapPayload(await this.readJson(response, 'TVCMall product search'));
-    const items = firstArray(payload, ['items', 'list', 'products', 'records']).map(mapProductSummary);
+    const listSource = firstObject(payload, ['model']) ?? payload;
+    const items = firstArray(listSource, ['items', 'list', 'products', 'records']).map(mapProductSummary);
 
     return {
       query: input.query,
       page: input.page,
       page_size: input.page_size,
-      total: readInteger(payload, ['total', 'totalCount', 'count', 'records'], items.length),
+      total: readInteger(listSource, ['total', 'totalCount', 'count', 'records', 'skuscount'], items.length),
       items
     };
   }
@@ -42,7 +43,7 @@ export class HttpProductClient extends BaseHttpClient implements ProductClient {
       headers: this.authHeaders(session)
     });
     const payload = unwrapPayload(await this.readJson(response, 'TVCMall product detail'));
-    const product = firstObject(payload, ['product', 'detail', 'item']) ?? payload;
+    const product = firstObject(payload, ['product', 'detail', 'item', 'model']) ?? payload;
 
     if (Object.keys(product).length === 0) return null;
     return mapProductDetail(product);
@@ -58,29 +59,27 @@ function mapProductSummary(source: JsonObject): ProductSummary {
     id,
     sku,
     title,
-    price: readNumber(source, ['price', 'salePrice', 'finalPrice', 'unitPrice']),
+    price: readNumber(source, ['discountedPrice', 'salePrice', 'finalPrice', 'unitPrice', 'price']),
     currency: 'USD',
     stock_status: mapStockStatus(source),
     category: readString(source, ['category', 'categoryName', 'catalogName']),
-    summary: readString(source, ['summary', 'brief', 'description', 'shortDescription'], title)
+    summary: readString(firstObject(source, ['salesInfo']) ?? source, ['summary', 'brief', 'salesPoint', 'description', 'shortDescription'], title)
   };
 }
 
 function mapProductDetail(source: JsonObject): ProductDetail {
   const summary = mapProductSummary(source);
+  const physicalSource = firstObject(source, ['properties']) ?? source;
   return {
     ...summary,
     moq: Math.max(1, readInteger(source, ['moq', 'minOrderQuantity', 'minimumOrderQuantity'], 1)),
-    weight_kg: readNumber(source, ['weight_kg', 'weightKg', 'weight']),
+    weight_kg: readNumber(physicalSource, ['weight_kg', 'weightKg', 'weight']),
     dimensions_cm: {
-      length: readNumber(source, ['length', 'length_cm', 'lengthCm']),
-      width: readNumber(source, ['width', 'width_cm', 'widthCm']),
-      height: readNumber(source, ['height', 'height_cm', 'heightCm'])
+      length: readNumber(physicalSource, ['length', 'length_cm', 'lengthCm']),
+      width: readNumber(physicalSource, ['width', 'width_cm', 'widthCm']),
+      height: readNumber(physicalSource, ['height', 'height_cm', 'heightCm'])
     },
-    attributes: firstArray(source, ['attributes', 'attrs', 'specifications']).map((item) => ({
-      name: readString(item, ['name', 'key', 'label']),
-      value: readString(item, ['value', 'text'])
-    })),
+    attributes: mapAttributes(source),
     images: readImageList(source)
   };
 }
@@ -101,6 +100,28 @@ function readImageList(source: JsonObject): string[] {
   if (Array.isArray(direct)) {
     return direct.map((item) => typeof item === 'string' ? item : readString(item as JsonObject, ['url', 'src'])).filter(Boolean);
   }
+
+  const imageGroups = firstObject(source, ['images']);
+  const productImages = imageGroups ? firstArray(imageGroups, ['productImages']) : [];
+  if (productImages.length > 0) {
+    return productImages.map((item) => readString(item, ['url', 'src'])).filter(Boolean);
+  }
+
   const image = readString(source, ['image', 'imageUrl', 'mainImage']);
   return image ? [image] : [];
+}
+
+function mapAttributes(source: JsonObject): ProductDetail['attributes'] {
+  const arrayAttributes = firstArray(source, ['attributes', 'attrs', 'specifications']).map((item) => ({
+    name: readString(item, ['name', 'key', 'label']),
+    value: readString(item, ['value', 'text'])
+  }));
+  if (arrayAttributes.length > 0) return arrayAttributes;
+
+  const properties = firstObject(source, ['properties']);
+  if (!properties) return [];
+
+  return Object.entries(properties)
+    .filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value))
+    .map(([name, value]) => ({ name, value: String(value) }));
 }

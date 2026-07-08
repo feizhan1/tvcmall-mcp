@@ -1,9 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { HttpAuthClient } from '../../src/auth/http-auth-client.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+function sampleResponse(name: string): Response {
+  return new Response(readFileSync(new URL(`../../docs/external/api-responses/${name}`, import.meta.url), 'utf8'), {
+    status: 200,
     headers: { 'content-type': 'application/json' }
   });
 }
@@ -85,5 +93,30 @@ describe('HttpAuthClient', () => {
 
     await expect(client.login({ email: 'buyer@example.com', password: 'secret-password' })).rejects.toThrow('TVCMall login failed: 401');
     await expect(client.login({ email: 'buyer@example.com', password: 'secret-password' })).rejects.not.toThrow('secret-password');
+  });
+
+  it('maps the real login response sample without requiring profile fields', async () => {
+    const fetchMock = vi.fn(async () => sampleResponse('登录api.json'));
+    const client = new HttpAuthClient({
+      baseUrl: 'https://api.tvcmall.test/',
+      authorization: 'login-api-authorization-example',
+      fetch: fetchMock
+    });
+
+    const session = await client.login({
+      email: 'buyer@example.com',
+      password: 'secret-password'
+    });
+
+    expect(session).toMatchObject({
+      customer: {
+        id: 'buyer@example.com',
+        email: 'buyer@example.com'
+      },
+      scopes: [],
+      accessToken: 'sample-access-token',
+      tokenType: 'Bearer'
+    });
+    expect(session.refreshToken).toBeUndefined();
   });
 });

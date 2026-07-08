@@ -1,0 +1,49 @@
+{
+  "data": {
+    "model": {
+      "Orders": {
+        "Pending": 628
+      },
+      "NotReviews": {
+        "Orders": 0,
+        "OrderItems": 0,
+        "Points": 0.0
+      },
+      "Images": {
+        "TotalQuota": -1,
+        "AvailableQuota": "No limits",
+        "ListMaxQty": 200
+      },
+      "Basic": {
+        "LastLoginOn": "2026-07-08 09:16:37",
+        "IsSubscription": true,
+        "RegisOn": "2021-06-10 08:54:38",
+        "FristOrderOn": "2026-07-07 07:15:55"
+      },
+      "Account": {
+        "Money": {
+          "FreezeBalance": 1969.75,
+          "Balance": "$106.37",
+          "BalanceUSD": 106.37
+        },
+        "Points": {
+          "Balance": 165.0
+        }
+      },
+      "UserLevel": 4,
+      "Sales": {
+        "Yearly": 0
+      },
+      "FreezeBalanceUSD": 1969.75,
+      "FreezeBalance": "$1,969.75",
+      "CouponCount": 35,
+      "WishCount": 19
+    },
+    "type": "points"
+  },
+  "code": 200,
+  "message": "",
+  "success": true,
+  "detailcode": "T00000",
+  "statusmodelflag": null
+}

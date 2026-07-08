@@ -50,16 +50,16 @@ export abstract class BaseHttpClient {
 }
 
 export function unwrapPayload(body: JsonObject): JsonObject {
-  const data = body.data;
+  const data = readField(body, 'data');
   if (isJsonObject(data)) return data;
-  const result = body.result;
+  const result = readField(body, 'result');
   if (isJsonObject(result)) return result;
   return body;
 }
 
 export function firstArray(source: JsonObject, keys: string[]): JsonObject[] {
   for (const key of keys) {
-    const value = source[key];
+    const value = readField(source, key);
     if (Array.isArray(value)) return value.filter(isJsonObject);
   }
   return [];
@@ -67,7 +67,7 @@ export function firstArray(source: JsonObject, keys: string[]): JsonObject[] {
 
 export function firstObject(source: JsonObject, keys: string[]): JsonObject | undefined {
   for (const key of keys) {
-    const value = source[key];
+    const value = readField(source, key);
     if (isJsonObject(value)) return value;
   }
   return undefined;
@@ -75,7 +75,7 @@ export function firstObject(source: JsonObject, keys: string[]): JsonObject | un
 
 export function readString(source: JsonObject, keys: string[], fallback = ''): string {
   for (const key of keys) {
-    const value = source[key];
+    const value = readField(source, key);
     if (typeof value === 'string' && value.trim()) return value.trim();
     if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   }
@@ -84,11 +84,14 @@ export function readString(source: JsonObject, keys: string[], fallback = ''): s
 
 export function readNumber(source: JsonObject, keys: string[], fallback = 0): number {
   for (const key of keys) {
-    const value = source[key];
+    const value = readField(source, key);
     if (typeof value === 'number' && Number.isFinite(value)) return value;
     if (typeof value === 'string' && value.trim()) {
-      const parsed = Number(value.replace(/,/g, ''));
+      const normalized = value.trim().replace(/,/g, '');
+      const parsed = Number(normalized);
       if (Number.isFinite(parsed)) return parsed;
+      const leadingNumber = normalized.match(/^-?\d+(?:\.\d+)?/);
+      if (leadingNumber) return Number(leadingNumber[0]);
     }
   }
   return fallback;
@@ -100,7 +103,7 @@ export function readInteger(source: JsonObject, keys: string[], fallback = 0): n
 
 export function readStringArray(source: JsonObject, keys: string[]): string[] | undefined {
   for (const key of keys) {
-    const value = source[key];
+    const value = readField(source, key);
     if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
     if (typeof value === 'string' && value.trim()) return value.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean);
   }
@@ -109,4 +112,11 @@ export function readStringArray(source: JsonObject, keys: string[]): string[] | 
 
 export function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readField(source: JsonObject, key: string): unknown {
+  if (Object.hasOwn(source, key)) return source[key];
+  const normalizedKey = key.toLowerCase();
+  const matchedKey = Object.keys(source).find((sourceKey) => sourceKey.toLowerCase() === normalizedKey);
+  return matchedKey === undefined ? undefined : source[matchedKey];
 }

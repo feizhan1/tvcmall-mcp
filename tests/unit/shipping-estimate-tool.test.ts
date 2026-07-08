@@ -32,7 +32,7 @@ const activeSession: StoredAuthSession = {
 describe('estimateShippingForMcp', () => {
   it('returns AUTH_REQUIRED when no session exists', async () => {
     const result = await estimateShippingForMcp(
-      { destination_country: 'US', items: [{ sku: 'TVC-IP15-CASE-CLEAR', quantity: 10 }] },
+      { sku: 'TVC-IP15-CASE-CLEAR', quantity: 10, countrycode: 'US' },
       { tokenStore: new MemoryTokenStore(null), authClient: new FakeAuthClient(), shippingClient: new FakeShippingClient() }
     );
 
@@ -42,7 +42,7 @@ describe('estimateShippingForMcp', () => {
 
   it('returns fake shipping options without token values', async () => {
     const result = await estimateShippingForMcp(
-      { destination_country: 'US', items: [{ sku: 'TVC-IP15-CASE-CLEAR', quantity: 10 }] },
+      { sku: 'TVC-IP15-CASE-CLEAR', quantity: 10, countrycode: 'US' },
       {
         tokenStore: new MemoryTokenStore(activeSession),
         authClient: new FakeAuthClient(),
@@ -64,15 +64,17 @@ describe('estimateShippingForMcp', () => {
     expect(JSON.stringify(result)).not.toContain('fake-refresh-token');
   });
 
-  it('accepts sku based product shipping input and rejects order_id only input', () => {
+  it('accepts OpenAPI aligned product shipping input and rejects order_id only input', () => {
     expect(EstimateShippingInputSchema.parse({
-      destination_country: 'AO',
-      items: [{ sku: '684000085E', quantity: 1 }]
+      sku: '684000085E',
+      quantity: 1,
+      countrycode: 'AO'
     })).toEqual({
-      destination_country: 'AO',
-      items: [{ sku: '684000085E', quantity: 1 }]
+      sku: '684000085E',
+      quantity: 1,
+      countrycode: 'AO'
     });
 
-    expect(() => EstimateShippingInputSchema.parse({ order_id: 'V24011000008' })).toThrow('destination_country');
+    expect(() => EstimateShippingInputSchema.parse({ order_id: 'V24011000008' })).toThrow('sku');
   });
 });

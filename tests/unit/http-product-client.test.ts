@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { HttpProductClient } from '../../src/products/http-product-client.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
 
@@ -12,6 +13,13 @@ const session: StoredAuthSession = {
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+function sampleResponse(name: string): Response {
+  return new Response(readFileSync(new URL(`../../docs/external/api-responses/${name}`, import.meta.url), 'utf8'), {
+    status: 200,
     headers: { 'content-type': 'application/json' }
   });
 }
@@ -109,5 +117,49 @@ describe('HttpProductClient', () => {
       attributes: [{ name: 'Color', value: 'Black' }],
       images: ['https://example.test/sku-1.jpg']
     });
+  });
+
+  it('maps the real product search response sample', async () => {
+    const fetchMock = vi.fn(async () => sampleResponse('关键字搜索产品api.json'));
+    const client = new HttpProductClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const result = await client.searchProducts({ query: 'iphone case', page: 1, page_size: 20 }, session);
+
+    expect(result.total).toBe(3656);
+    expect(result.items).toHaveLength(39);
+    expect(result.items[0]).toMatchObject({
+      id: '661100446A',
+      sku: '661100446A',
+      title: 'DUX DUCIS for iPhone 17 Pro Case Magnetic Frosted Shockproof 2 in 1 PC TPU MagSafe Cover - Red',
+      price: 2.16,
+      currency: 'USD',
+      stock_status: 'in_stock',
+      category: 'Gamepads'
+    });
+  });
+
+  it('maps the real product detail response sample', async () => {
+    const fetchMock = vi.fn(async () => sampleResponse('产品详情api.json'));
+    const client = new HttpProductClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const detail = await client.getProductDetail('/details/sample-product.html', session);
+
+    expect(detail).toMatchObject({
+      id: '684000085E',
+      sku: '684000085E',
+      title: 'Camera Hot Shoe Cover Fruit Cartoon Design for Canon Nikon Sony Leica DSLR Mirrorless Universal Protective Cap',
+      price: 1.63,
+      currency: 'USD',
+      stock_status: 'in_stock',
+      category: 'Gamepads',
+      moq: 1,
+      weight_kg: 0.015,
+      dimensions_cm: { length: 8.5, width: 11, height: 2.5 }
+    });
+    expect(detail?.attributes).toEqual(expect.arrayContaining([
+      { name: 'Material', value: 'Plastic,PVC' },
+      { name: 'Weight', value: '0.015kg' }
+    ]));
+    expect(detail?.images).toHaveLength(5);
   });
 });

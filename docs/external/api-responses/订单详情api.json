@@ -1,0 +1,706 @@
+{
+  "data": {
+    "OrderID": "V26041400008",
+    "UserID": "sample-user-id",
+    "Currency": {
+      "CurrencyCode": "USD",
+      "CurrencyName": "USD",
+      "FormatString": "${0:N2}",
+      "Format2String": "USD{0:0.00}",
+      "Format3String": "USD-${0:0.00}",
+      "Symbol": "$ - USD",
+      "Symbol2": "USD",
+      "Symbol3": "USD - $"
+    },
+    "OriginalAmount": 6.27,
+    "OriginalAmountFormat": "$6.27",
+    "DiscountedAmount": 6.17,
+    "DiscountedAmountFormat": "$6.17",
+    "DiscountInfo": {
+      "DiscountByType": {
+        "Promotion": 0.1,
+        "PromotionFormat": "$0.10"
+      },
+      "DiscountByPromotions": [
+        {
+          "DiscountIdentifier": "Promotion:37841",
+          "DiscountType": "Promotion",
+          "DiscountForm": "DirectDiscount",
+          "DiscountAmount": 0.1,
+          "DiscountAmountFormat": "$0.10",
+          "DiscountAmountUSD": 0.1,
+          "DiscountAmountUSDFormat": "$0.10",
+          "Name": "640400153A的促销",
+          "CouponCode": null,
+          "Description": "",
+          "PromotionID": 37841,
+          "SelectedGift": null,
+          "GiftSkus": null,
+          "GiftDetails": null
+        }
+      ],
+      "DiscountAmountUSD": 0.1,
+      "DiscountAmountUSDFormat": "$0.10",
+      "DiscountAmount": 0.1,
+      "DiscountAmountFormat": "$0.10",
+      "DiscountedAmountUSD": 6.17,
+      "DiscountedAmountUSDFormat": "$6.17",
+      "DiscountedAmount": 6.17,
+      "DiscountedAmountFormat": "$6.17",
+      "CouponInfo": null,
+      "Discounts": {
+        "UserDiscount": null,
+        "Promotion": {
+          "DiscountAmountUSD": 0.1,
+          "DiscountAmountUSDFormat": "$0.10",
+          "DiscountAmount": 0.1,
+          "DiscountAmountFormat": "$0.10",
+          "Items": [
+            {
+              "DiscountIdentifier": "Promotion:37841",
+              "DiscountType": "Promotion",
+              "DiscountForm": "DirectDiscount",
+              "DiscountAmount": 0.1,
+              "DiscountAmountFormat": "$0.10",
+              "DiscountAmountUSD": 0.1,
+              "DiscountAmountUSDFormat": "$0.10",
+              "Name": "640400153A的促销",
+              "CouponCode": null,
+              "Description": "",
+              "PromotionID": 37841,
+              "SelectedGift": null,
+              "GiftSkus": null,
+              "GiftDetails": null
+            }
+          ],
+          "DiscountRules": [
+            {
+              "Promotion": {
+                "PromotionID": 37841,
+                "Name": "640400153A的促销",
+                "Description": "",
+                "Url": "",
+                "DiscountForm": 1,
+                "EndDate": "2036-03-31 16:00:00",
+                "BeginDate": "2026-03-31 16:00:00",
+                "ShowCountdown": false,
+                "DiscountRules": "{\"Catalog\":null,\"DiscountForm\":\"DirectDiscount\",\"DiscountRate\":0.84,\"Range\":[\"me\"]}",
+                "GlobalPromotion": false
+              },
+              "DiscountRules": {
+                "reason": "",
+                "DiscountRate": 0.84,
+                "DiscountForm": 1,
+                "Tips": {
+                  "coupon": "{discountvalue} off"
+                },
+                "Range": [
+                  "640400153A"
+                ],
+                "CatalogIds": null,
+                "Amount": 0.0,
+                "AmountFormat": "$0.00"
+              },
+              "DiscountType": "Promotion",
+              "Identifier": "Promotion:37841"
+            }
+          ]
+        },
+        "RequestDiscount": null,
+        "BottomPrice": null,
+        "EmailOnly": null,
+        "Coupon": null
+      }
+    },
+    "Deduction": 0.0,
+    "DeductionFormat": "$0.00",
+    "DeductionUSD": 0.0,
+    "DeductionUSDFormat": "$0.00",
+    "ShippingMethod": null,
+    "ShippingMethodName": null,
+    "ShippingDeliveryCycle": "",
+    "ShippingCountryCode": "TR",
+    "ShippingCost": 0.0,
+    "ShippingCostFormat": "$0.00",
+    "TransactionCost": 0.51,
+    "TransactionCostFormat": "$0.51",
+    "TransactionCostRate": 0.034,
+    "TotalAmount": 6.68,
+    "TotalAmountFormat": "$6.68",
+    "RawAmounts": {
+      "Currency": null,
+      "DiscountedAmount": 6.17,
+      "DiscountedAmountFormat": "$6.17",
+      "DeductAmount": 0.0,
+      "DeductAmountFormat": "$0.00",
+      "DeductAmountUSD": 0.0,
+      "DeductAmountUSDFormat": "$0.00",
+      "OriginalAmount": 6.27,
+      "OriginalAmountFormat": "$6.27",
+      "ShippingCost": 0.0,
+      "ShippingCostFormat": "$0.00",
+      "TransactionCost": 0.51,
+      "TransactionCostFormat": "$0.51",
+      "TransactionCostRate": 0.034,
+      "TotalAmount": 6.68,
+      "TotalAmountFormat": "$6.68",
+      "TotalAmountWithoutDeduct": 6.68,
+      "TotalAmountWithoutDeductFormat": null,
+      "FreightFee": 0.0,
+      "FreightFeeFormat": "$0.00",
+      "IossFee": 0.0,
+      "IossFeeFormat": "$0.00",
+      "AddCost": 0.3,
+      "AddCostFormat": "$0.30",
+      "FeeAdjustment": 0.0,
+      "FeeAdjustmentFormat": "$0.00"
+    },
+    "TotalGrossWeight": 2.343,
+    "TotalGrossWeightFormat": 2.343,
+    "TotalVolumeWeight": 0.692,
+    "TotalVolumeWeightFormat": 0.692,
+    "Settings": {
+      "ShippingInfo": {
+        "ShippingAgentId": null,
+        "Weight": null,
+        "VolumeWeight": null,
+        "ShippingCost": null,
+        "ShippingCostFormat": null,
+        "Tariff": null
+      },
+      "ColorInShortage": "3",
+      "GoodsInShortage": "3",
+      "DropShip": "false",
+      "ShippingFee": "0",
+      "ShippingFeeFormat": "$0.00",
+      "GoodsValue": "100",
+      "OrderInit": "true",
+      "site": "newtvcmall",
+      "PI": null,
+      "CI": null,
+      "UseBalance": null,
+      "UseBalanceAmount": null,
+      "UseBalanceAmountFormat": null,
+      "UseBalanceInit": null
+    },
+    "Remark": "",
+    "PaymentMethod": "PPLC",
+    "PaymentMethodName": "PayPal Creditcard",
+    "PaymentMethodDescription": "The PayPal transaction fee of this order is 3.4%.",
+    "HasChanges": false,
+    "OrderStatus": {
+      "DisplayStatus": "Pending",
+      "GroupingStatus": "Pending",
+      "InternalStatus": "ReadyForShipment",
+      "CanSetShipping": true,
+      "CanPayment": false,
+      "CanPaymentSuccess": false,
+      "CanModify": true,
+      "Paid": false,
+      "Invalid": false,
+      "SpecialPaid": false
+    },
+    "Items": [
+      {
+        "SKU": "661100432A",
+        "Name": "Bulk Purchasing DUX DUCIS For Samsung Galaxy S4 mini  Sunflower Pattern Stand Cover with Hand Strap - Red",
+        "Image": "/uploads/661100432A.jpg",
+        "Url": "/details/bulk-purchasing-dux-ducis-for-samsung-galaxy-s4-mini-sunflower-pattern-stand-cover-with-hand-strap-red-sku661100432a.html",
+        "OnSale": true,
+        "Quantity": 1,
+        "VolumeWeight": 0.046,
+        "GrossWeight": 0.067,
+        "UnitPrice": 4.29,
+        "UnitPriceFormat": "$4.29",
+        "UnitPriceDisplay": "$4.29",
+        "OriginalPrice": 4.29,
+        "OriginalPriceFormat": "$4.29",
+        "OriginalPriceDisplay": null,
+        "Subtotal": 4.29,
+        "SubtotalFormat": null,
+        "SubtotalDisplay": "$4.29",
+        "Remark": "",
+        "EanCode": "",
+        "CustomerNo": "",
+        "OrderCode": "661100432A",
+        "Items": null,
+        "DiscountType": null,
+        "DiscountForm": null,
+        "DiscountIdentifier": null,
+        "ProductSKU": "661100432A",
+        "MinQuantity": 1,
+        "Attributes": {
+          "Color": "Red"
+        },
+        "Applicables": [
+          {
+            "Code": "A00080138",
+            "Name": "Galaxy S4 mini"
+          }
+        ],
+        "LogisticsTags": [
+          "Common"
+        ],
+        "Tags": [
+          "BestSellers",
+          "Brands"
+        ],
+        "Remaining": null,
+        "DifferPrice": 0.0,
+        "DifferPriceFormat": null,
+        "CategoryName": "Gamepads",
+        "CategoryCode": "C010800010001",
+        "MixedBatch": 0
+      },
+      {
+        "SKU": "640400153A",
+        "Name": "Baseus for Other HTC Models 240W Fast Charging USB-C Adapter 8K 80Gbps High Speed Data Transfer    - Red",
+        "Image": "/uploads/640400153A.jpg",
+        "Url": "/details/baseus-for-other-htc-models-240w-fast-charging-usb-c-adapter-8k-80gbps-high-speed-data-transfer-red-sku640400153a.html",
+        "OnSale": true,
+        "Quantity": 2,
+        "VolumeWeight": 0.001,
+        "GrossWeight": 1.12,
+        "UnitPrice": 0.25,
+        "UnitPriceFormat": "$0.25",
+        "UnitPriceDisplay": "$0.25",
+        "OriginalPrice": 0.3,
+        "OriginalPriceFormat": "$0.30",
+        "OriginalPriceDisplay": "$0.30",
+        "Subtotal": 0.5,
+        "SubtotalFormat": null,
+        "SubtotalDisplay": "$0.50",
+        "Remark": "",
+        "EanCode": "",
+        "CustomerNo": "",
+        "OrderCode": "640400153A",
+        "Items": null,
+        "DiscountType": "Promotion",
+        "DiscountForm": "DirectDiscount",
+        "DiscountIdentifier": "Promotion:37841",
+        "ProductSKU": "640400153A",
+        "MinQuantity": 2,
+        "Attributes": {
+          "Color": "Red"
+        },
+        "Applicables": [
+          {
+            "Code": "A00010022",
+            "Name": "Other HTC Models"
+          }
+        ],
+        "LogisticsTags": [
+          "Mask"
+        ],
+        "Tags": [
+          "BestSellers",
+          "Brands",
+          "EUTopRanking"
+        ],
+        "Remaining": null,
+        "DifferPrice": 0.0,
+        "DifferPriceFormat": null,
+        "CategoryName": "Oppo A11s Cases",
+        "CategoryCode": "C003700470005",
+        "MixedBatch": 0
+      },
+      {
+        "SKU": "661100433A",
+        "Name": "vivo T1x 5G For vivo vivo T1x 5G BINFEN COLOR Leather Case Splicing Color RFID Blocking Wallet Stand Phone Cover - Wine Red",
+        "Image": "/uploads/661100433A.jpg",
+        "Url": "/details/vivo-t1x-5g-for-vivo-vivo-t1x-5g-binfen-color-leather-case-splicing-color-rfid-blocking-wallet-stand-phone-cover-wine-red-sku661100433a.html",
+        "OnSale": true,
+        "Quantity": 1,
+        "VolumeWeight": 0.323,
+        "GrossWeight": 0.018,
+        "UnitPrice": 0.69,
+        "UnitPriceFormat": "$0.69",
+        "UnitPriceDisplay": "$0.69",
+        "OriginalPrice": 0.69,
+        "OriginalPriceFormat": "$0.69",
+        "OriginalPriceDisplay": null,
+        "Subtotal": 0.69,
+        "SubtotalFormat": null,
+        "SubtotalDisplay": "$0.69",
+        "Remark": "",
+        "EanCode": "",
+        "CustomerNo": "",
+        "OrderCode": "661100433A",
+        "Items": null,
+        "DiscountType": null,
+        "DiscountForm": null,
+        "DiscountIdentifier": null,
+        "ProductSKU": "661100433A",
+        "MinQuantity": 1,
+        "Attributes": {
+          "Color": "Wine Red"
+        },
+        "Applicables": [
+          {
+            "Code": "A00420169",
+            "Name": "vivo T1x 5G"
+          }
+        ],
+        "LogisticsTags": [
+          "Common"
+        ],
+        "Tags": [
+          "BestSellers",
+          "Brands"
+        ],
+        "Remaining": null,
+        "DifferPrice": 0.0,
+        "DifferPriceFormat": null,
+        "CategoryName": "Star Test Published Level 3 Again",
+        "CategoryCode": "C010700030008",
+        "MixedBatch": 0
+      },
+      {
+        "SKU": "661100433B",
+        "Name": "vivo T1x 5G For vivo vivo T1x 5G BINFEN COLOR Leather Case Splicing Color RFID Blocking Wallet Stand Phone Cover - Yellow",
+        "Image": "/uploads/661100433B.jpg",
+        "Url": "/details/vivo-t1x-5g-for-vivo-vivo-t1x-5g-binfen-color-leather-case-splicing-color-rfid-blocking-wallet-stand-phone-cover-yellow-sku661100433b.html",
+        "OnSale": true,
+        "Quantity": 1,
+        "VolumeWeight": 0.323,
+        "GrossWeight": 0.018,
+        "UnitPrice": 0.69,
+        "UnitPriceFormat": "$0.69",
+        "UnitPriceDisplay": "$0.69",
+        "OriginalPrice": 0.69,
+        "OriginalPriceFormat": "$0.69",
+        "OriginalPriceDisplay": null,
+        "Subtotal": 0.69,
+        "SubtotalFormat": null,
+        "SubtotalDisplay": "$0.69",
+        "Remark": "",
+        "EanCode": "",
+        "CustomerNo": "",
+        "OrderCode": "661100433B",
+        "Items": null,
+        "DiscountType": null,
+        "DiscountForm": null,
+        "DiscountIdentifier": null,
+        "ProductSKU": "661100433B",
+        "MinQuantity": 1,
+        "Attributes": {
+          "Color": "Yellow"
+        },
+        "Applicables": [
+          {
+            "Code": "A00420169",
+            "Name": "vivo T1x 5G"
+          }
+        ],
+        "LogisticsTags": [
+          "Common"
+        ],
+        "Tags": [
+          "BestSellers",
+          "Brands"
+        ],
+        "Remaining": null,
+        "DifferPrice": 0.0,
+        "DifferPriceFormat": null,
+        "CategoryName": "Star Test Published Level 3 Again",
+        "CategoryCode": "C010700030008",
+        "MixedBatch": 0
+      }
+    ],
+    "GroupItems": null,
+    "TotalItems": 4,
+    "TotalGroups": 4,
+    "TotalQuantity": 5,
+    "CreatedOn": "2026-04-14 03:34:59",
+    "CreatedOnFormat": "04/14/2026",
+    "ShippedOn": null,
+    "ShippedOnFormat": "",
+    "PaymentOnFormat": "",
+    "SalesContact": {
+      "Name": "Admin1314",
+      "Email": "sample@example.com",
+      "Skype": "sample-skype",
+      "TradeManager": "sample-trademanager",
+      "WeChat": "sample-wechat",
+      "WhatsApp": "+0000000000",
+      "Tel": "123****",
+      "Photo": ""
+    },
+    "Site": "TVCMall",
+    "AmountOfDiscountBase": 6.27,
+    "AmountOfDiscountBaseFormat": null,
+    "AmountWithoutDiscounted": 5.67,
+    "AmountWithoutDiscountedFormat": null,
+    "LogisticsTags": null,
+    "SplitOrders": null,
+    "FreightFee": 0.0,
+    "FreightFeeFormat": "$0.00",
+    "Warehouse": "1",
+    "Language": "en",
+    "PaymentOn": null,
+    "ModifiedOn": "2026-07-08 06:43:25",
+    "RecalculatedOn": "2026-07-08 06:43:25",
+    "SplitLogicsticName": "",
+    "Expands": [],
+    "IossNeed": false,
+    "IossType": 0,
+    "IossFee": 0.0,
+    "IossFeeFormat": "$0.00",
+    "IossNumber": "",
+    "IossNumberFormat": null,
+    "IsFirstOrder": 0,
+    "FeeAdjustment": 0.0,
+    "FeeAdjustmentFormat": "$0.00",
+    "AddCost": 0.3,
+    "AddCostFormat": "$0.30",
+    "TotalSaveAmount": 0.1,
+    "TotalSaveAmountFormat": "$0.10",
+    "PageItems": 4,
+    "TotalItems_Brand": 4,
+    "TotalQuantity_Brand": 5,
+    "NoMOQItems": [
+      {
+        "SKU": "661100432A",
+        "Name": "Bulk Purchasing DUX DUCIS For Samsung Galaxy S4 mini  Sunflower Pattern Stand Cover with Hand Strap - Red",
+        "Image": "/uploads/661100432A.jpg",
+        "Url": "/details/bulk-purchasing-dux-ducis-for-samsung-galaxy-s4-mini-sunflower-pattern-stand-cover-with-hand-strap-red-sku661100432a.html",
+        "OnSale": true,
+        "Quantity": 1,
+        "VolumeWeight": 0.045696,
+        "GrossWeight": 0.0672,
+        "UnitPrice": 4.29,
+        "UnitPriceFormat": "$4.29",
+        "UnitPriceDisplay": "$4.29",
+        "OriginalPrice": 4.29,
+        "OriginalPriceFormat": "$4.29",
+        "OriginalPriceDisplay": null,
+        "Subtotal": 4.29,
+        "SubtotalFormat": null,
+        "SubtotalDisplay": "$4.29",
+        "Remark": "",
+        "EanCode": "",
+        "CustomerNo": "",
+        "OrderCode": "661100432A",
+        "Items": null,
+        "DiscountType": null,
+        "DiscountForm": null,
+        "DiscountIdentifier": null,
+        "ProductSKU": "661100432A",
+        "MinQuantity": 1,
+        "Attributes": {
+          "Color": "Red"
+        },
+        "Applicables": [
+          {
+            "Code": "A00080138",
+            "Name": "Galaxy S4 mini"
+          }
+        ],
+        "LogisticsTags": [
+          "Common"
+        ],
+        "Tags": [
+          "BestSellers",
+          "Brands"
+        ],
+        "Remaining": null,
+        "DifferPrice": 0.0,
+        "DifferPriceFormat": null,
+        "CategoryName": "Gamepads",
+        "CategoryCode": "C010800010001",
+        "MixedBatch": 0
+      },
+      {
+        "SKU": "640400153A",
+        "Name": "Baseus for Other HTC Models 240W Fast Charging USB-C Adapter 8K 80Gbps High Speed Data Transfer    - Red",
+        "Image": "/uploads/640400153A.jpg",
+        "Url": "/details/baseus-for-other-htc-models-240w-fast-charging-usb-c-adapter-8k-80gbps-high-speed-data-transfer-red-sku640400153a.html",
+        "OnSale": true,
+        "Quantity": 2,
+        "VolumeWeight": 0.000448,
+        "GrossWeight": 1.12,
+        "UnitPrice": 0.25,
+        "UnitPriceFormat": "$0.25",
+        "UnitPriceDisplay": "$0.25",
+        "OriginalPrice": 0.3,
+        "OriginalPriceFormat": "$0.30",
+        "OriginalPriceDisplay": "$0.30",
+        "Subtotal": 0.5,
+        "SubtotalFormat": null,
+        "SubtotalDisplay": "$0.50",
+        "Remark": "",
+        "EanCode": "",
+        "CustomerNo": "",
+        "OrderCode": "640400153A",
+        "Items": null,
+        "DiscountType": "Promotion",
+        "DiscountForm": "DirectDiscount",
+        "DiscountIdentifier": "Promotion:37841",
+        "ProductSKU": "640400153A",
+        "MinQuantity": 2,
+        "Attributes": {
+          "Color": "Red"
+        },
+        "Applicables": [
+          {
+            "Code": "A00010022",
+            "Name": "Other HTC Models"
+          }
+        ],
+        "LogisticsTags": [
+          "Mask"
+        ],
+        "Tags": [
+          "BestSellers",
+          "Brands",
+          "EUTopRanking"
+        ],
+        "Remaining": null,
+        "DifferPrice": 0.0,
+        "DifferPriceFormat": null,
+        "CategoryName": "Oppo A11s Cases",
+        "CategoryCode": "C003700470005",
+        "MixedBatch": 0
+      },
+      {
+        "SKU": "661100433A",
+        "Name": "vivo T1x 5G For vivo vivo T1x 5G BINFEN COLOR Leather Case Splicing Color RFID Blocking Wallet Stand Phone Cover - Wine Red",
+        "Image": "/uploads/661100433A.jpg",
+        "Url": "/details/vivo-t1x-5g-for-vivo-vivo-t1x-5g-binfen-color-leather-case-splicing-color-rfid-blocking-wallet-stand-phone-cover-wine-red-sku661100433a.html",
+        "OnSale": true,
+        "Quantity": 1,
+        "VolumeWeight": 0.32256,
+        "GrossWeight": 0.01792,
+        "UnitPrice": 0.69,
+        "UnitPriceFormat": "$0.69",
+        "UnitPriceDisplay": "$0.69",
+        "OriginalPrice": 0.69,
+        "OriginalPriceFormat": "$0.69",
+        "OriginalPriceDisplay": null,
+        "Subtotal": 0.69,
+        "SubtotalFormat": null,
+        "SubtotalDisplay": "$0.69",
+        "Remark": "",
+        "EanCode": "",
+        "CustomerNo": "",
+        "OrderCode": "661100433A",
+        "Items": null,
+        "DiscountType": null,
+        "DiscountForm": null,
+        "DiscountIdentifier": null,
+        "ProductSKU": "661100433A",
+        "MinQuantity": 1,
+        "Attributes": {
+          "Color": "Wine Red"
+        },
+        "Applicables": [
+          {
+            "Code": "A00420169",
+            "Name": "vivo T1x 5G"
+          }
+        ],
+        "LogisticsTags": [
+          "Common"
+        ],
+        "Tags": [
+          "BestSellers",
+          "Brands"
+        ],
+        "Remaining": null,
+        "DifferPrice": 0.0,
+        "DifferPriceFormat": null,
+        "CategoryName": "Star Test Published Level 3 Again",
+        "CategoryCode": "C010700030008",
+        "MixedBatch": 0
+      },
+      {
+        "SKU": "661100433B",
+        "Name": "vivo T1x 5G For vivo vivo T1x 5G BINFEN COLOR Leather Case Splicing Color RFID Blocking Wallet Stand Phone Cover - Yellow",
+        "Image": "/uploads/661100433B.jpg",
+        "Url": "/details/vivo-t1x-5g-for-vivo-vivo-t1x-5g-binfen-color-leather-case-splicing-color-rfid-blocking-wallet-stand-phone-cover-yellow-sku661100433b.html",
+        "OnSale": true,
+        "Quantity": 1,
+        "VolumeWeight": 0.32256,
+        "GrossWeight": 0.01792,
+        "UnitPrice": 0.69,
+        "UnitPriceFormat": "$0.69",
+        "UnitPriceDisplay": "$0.69",
+        "OriginalPrice": 0.69,
+        "OriginalPriceFormat": "$0.69",
+        "OriginalPriceDisplay": null,
+        "Subtotal": 0.69,
+        "SubtotalFormat": null,
+        "SubtotalDisplay": "$0.69",
+        "Remark": "",
+        "EanCode": "",
+        "CustomerNo": "",
+        "OrderCode": "661100433B",
+        "Items": null,
+        "DiscountType": null,
+        "DiscountForm": null,
+        "DiscountIdentifier": null,
+        "ProductSKU": "661100433B",
+        "MinQuantity": 1,
+        "Attributes": {
+          "Color": "Yellow"
+        },
+        "Applicables": [
+          {
+            "Code": "A00420169",
+            "Name": "vivo T1x 5G"
+          }
+        ],
+        "LogisticsTags": [
+          "Common"
+        ],
+        "Tags": [
+          "BestSellers",
+          "Brands"
+        ],
+        "Remaining": null,
+        "DifferPrice": 0.0,
+        "DifferPriceFormat": null,
+        "CategoryName": "Star Test Published Level 3 Again",
+        "CategoryCode": "C010700030008",
+        "MixedBatch": 0
+      }
+    ],
+    "MOQItems": [],
+    "NoMOQGroupItems": null,
+    "MOQGroupItems": null,
+    "PurchasedList": [],
+    "CombinationPromotionsArray": [],
+    "Address": {
+      "OrderID": "V26041400008",
+      "UserAddressID": 1000,
+      "CountryName": "Turkey",
+      "Concats": "Sample Recipient",
+      "CountryCode": "TR",
+      "Province": "Sample Province",
+      "City": "Sample City",
+      "Address": "Sample Address",
+      "PostCode": "12345",
+      "Telephone": "123****",
+      "Mobile": "123****",
+      "Fax": "+0000000000",
+      "VATNo": "REDACTED_VAT",
+      "EORI": "REDACTED_EORI",
+      "BillingAddress": "Sample Address",
+      "IsDefault": false,
+      "CompanyName": "Sample Company",
+      "ID": 1000
+    },
+    "UserEmail": "sample@example.com",
+    "ComputePromotion": 0.1,
+    "ComputePromotionFormat": "$0.10",
+    "ComputeDiscountAmount": 0.0,
+    "ComputeDiscountAmountFormat": "$0.00",
+    "ComputeOtherDiscounts": 0.0,
+    "ComputeOtherDiscountsFormat": "$0.00"
+  },
+  "code": 200,
+  "message": "",
+  "success": true,
+  "detailcode": "",
+  "statusmodelflag": null
+}
