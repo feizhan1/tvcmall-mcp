@@ -24,6 +24,8 @@ src/
     mcp-stdio-harness.ts     # 测试用 stdio JSON-RPC harness
     memory-token-store.ts    # 测试用内存 token store
     stdio-server.ts          # 集成测试专用 server 入口
+  config/
+    runtime-config.ts        # HTTP API 运行时环境变量读取
   tools/
     *.ts                     # tool 输入输出 schema 与 MCP 业务包装
   */fake-*-client.ts         # 基于 fixtures 的 fake client
@@ -70,6 +72,8 @@ stdio 相关测试必须关注两点：
 - 真实 API client 应实现当前领域 interface，例如 `ProductClient`、`OrderClient`、`TrackingClient`。
 - 新增真实 API client 后，fake client 和 fixtures 继续保留，用于离线测试、回归测试和契约对照。
 - 认证、token refresh 和权限错误需要先映射到 `docs/api-contract.md` 中定义的稳定错误码。
+- HTTP API base URL、timeout、API 环境、日志级别和导出目录等运行时配置从 `src/config/runtime-config.ts` 读取；测试应显式传入 env map，不直接依赖开发者本机环境变量。
+- token、密码和客户 PII 不属于运行时环境变量，继续通过 CLI 和系统凭证库管理。
 
 ## 验证基线
 

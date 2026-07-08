@@ -130,6 +130,20 @@ GET  /api/mcp/auth/me
 
 其中 token 不建议直接放 `config.json`，应放系统凭证库。
 
+### 运行时环境变量
+
+真实 HTTP API client 接入后，运行时配置由 `src/config/runtime-config.ts` 统一读取，MCP tools 和领域 client 不应直接散落读取 `process.env`。
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `TVCMALL_API_BASE_URL` | `https://api.tvcmall.com` | TVCMall HTTP API base URL |
+| `TVCMALL_API_TIMEOUT_MS` | `15000` | HTTP 请求超时时间，单位毫秒；无效值回退默认值 |
+| `TVCMALL_API_ENV` | `production` | API 环境：`production`、`staging`、`sandbox`；无效值回退默认值 |
+| `TVCMALL_LOG_LEVEL` | `info` | 日志级别：`silent`、`error`、`warn`、`info`、`debug`；无效值回退默认值 |
+| `TVCMALL_EXPORT_DIR` | 未设置 | 默认订单导出目录；为空时由导出逻辑自行选择安全默认目录 |
+
+环境变量只用于非敏感运行时配置；`access_token`、`refresh_token`、密码、完整地址、电话、邮箱等敏感信息不应放入环境变量、`config.json` 或日志。
+
 ## 6. MCP Tools
 
 登录相关不要做成接收密码的 MCP tool。MCP tools 只使用已保存 token。

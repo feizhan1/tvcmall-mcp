@@ -45,6 +45,20 @@ node dist/index.js whoami
 
 当前认证使用本地假数据：`login` 会保存 `fake.customer@example.com` 的 fake token session 到系统凭证库，`whoami` 和 MCP `tvcmall_auth_status` 会在 session 过期时自动 refresh，`logout` 会先调用 fake logout 再清除本地 session；这些命令不会请求密码，也不会连接 TVCMall 后端。
 
+## HTTP API 环境变量
+
+后续接入真实 TVCMall HTTP API 时，运行时配置通过环境变量读取；当前 fake client 不会连接真实后端。
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `TVCMALL_API_BASE_URL` | `https://api.tvcmall.com` | 真实 TVCMall API base URL |
+| `TVCMALL_API_TIMEOUT_MS` | `15000` | HTTP 请求超时时间，单位毫秒 |
+| `TVCMALL_API_ENV` | `production` | API 环境：`production`、`staging` 或 `sandbox` |
+| `TVCMALL_LOG_LEVEL` | `info` | 日志级别：`silent`、`error`、`warn`、`info`、`debug` |
+| `TVCMALL_EXPORT_DIR` | 未设置 | 默认订单导出目录 |
+
+不要把 `access_token`、`refresh_token`、密码或客户 PII 放进环境变量；用户 token 继续通过 CLI login 写入系统凭证库。
+
 ## Harness 化开发
 
 当前代码按 harness engineering 方式组织：`src/server.ts` 只装配依赖，MCP tool 注册集中在 `src/app/register-tools.ts`；假数据集中放在 `src/fixtures/`；测试支撑放在 `src/harness/`；stdio 集成测试通过真实 MCP JSON-RPC 调用验证 `initialize`、`tools/list` 和 `tools/call`。
@@ -129,6 +143,8 @@ tvcmall-mcp/
       logout.ts
       whoami.ts
       install.ts
+    config/
+      runtime-config.ts
     fixtures/
       products.ts
       orders.ts
