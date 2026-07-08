@@ -74,7 +74,7 @@ stdio 相关测试必须关注两点：
 - 认证、token refresh 和权限错误需要先映射到 `docs/api-contract.md` 中定义的稳定错误码。
 - HTTP API base URL、timeout、API 环境、数据源开关、登录 API `Authorization` header、日志级别和导出目录等运行时配置从 `src/config/runtime-config.ts` 读取；测试应显式传入 env map，不直接依赖开发者本机环境变量。
 - token、密码和客户 PII 不属于运行时环境变量，继续通过 CLI 和系统凭证库管理；`TVCMALL_API_AUTHORIZATION` 如为敏感部署凭据，只能通过本机环境或部署注入。
-- 真实登录逻辑从 `src/auth/http-auth-client.ts` 开始接入，当前仅覆盖 `docs/external/登录.openapi.yaml` 中已提供的 `/user/login`。
+- 真实登录逻辑从 `src/auth/http-auth-client.ts` 和 CLI `login` 命令接入，当前仅覆盖 `docs/external/登录.openapi.yaml` 中已提供的 `/user/login`；默认 fake 模式仍不请求密码。
 - 设置 `TVCMALL_DATA_SOURCE=real` 后，server 会对 auth、商品、订单、积分、物流和运费能力装配 HTTP clients；商品、订单、积分、物流和运费 clients 的 `Authorization` header 必须来自 `StoredAuthSession.accessToken`，不能复用 `TVCMALL_API_AUTHORIZATION`。
 
 ## 验证基线

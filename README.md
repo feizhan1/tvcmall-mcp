@@ -44,7 +44,18 @@ node dist/index.js login
 node dist/index.js whoami
 ```
 
-当前认证使用本地假数据：`login` 会保存 `fake.customer@example.com` 的 fake token session 到系统凭证库，`whoami` 和 MCP `tvcmall_auth_status` 会在 session 过期时自动 refresh，`logout` 会先调用 fake logout 再清除本地 session；这些命令不会请求密码，也不会连接 TVCMall 后端。
+当前默认认证使用本地假数据：`login` 会保存 `fake.customer@example.com` 的 fake token session 到系统凭证库，`whoami` 和 MCP `tvcmall_auth_status` 会在 session 过期时自动 refresh，`logout` 会先调用 fake logout 再清除本地 session；默认命令不会请求密码，也不会连接 TVCMall 后端。
+
+真实登录需要显式开启真实数据源，并配置 API 地址和登录接口 Authorization：
+
+```bash
+TVCMALL_DATA_SOURCE=real \
+TVCMALL_API_BASE_URL=https://api.tvcmall.com \
+TVCMALL_API_AUTHORIZATION=login-api-authorization-example \
+node dist/index.js login --email customer@example.com
+```
+
+未传 `--password` 时 CLI 会隐藏输入密码。不要在共享 shell 历史里使用 `--password` 传真实密码。登录成功后，token 会保存到系统凭证库，后续真实 HTTP API 请求的 `Authorization` header 使用登录返回的 `accessToken`。
 
 ## HTTP API 环境变量
 
