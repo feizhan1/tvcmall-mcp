@@ -9,6 +9,7 @@ TVCMall Customer MCP 是面向 TVCMall 客户、采购商、分销商和店铺�
 - `AGENTS.md`：AI Agent 在本仓库工作的规则，包含中文交流、安全边界、测试与文档维护要求。
 - `docs/mvp-scope.md`：v0.1 项目定位、MVP 范围、架构、实施阶段、验收标准和主要风险。
 - `docs/api-contract.md`：CLI、认证接口、token 策略、MCP tools、后端 API、scope、错误码和订单导出契约。
+- `docs/harness.md`：harness engineering 结构、fixtures 规则、stdio 集成测试和真实 API 替换策略。
 - `docs/tvcmall-customer-mcp-v0.1-implementation.md`：历史实施资料索引，后续只做导航，不再维护长篇重复内容。
 
 ## v0.1 核心范围
@@ -43,6 +44,22 @@ node dist/index.js whoami
 ```
 
 当前认证使用本地假数据：`login` 会保存 `fake.customer@example.com` 的 fake token session 到系统凭证库，`whoami` 和 MCP `tvcmall_auth_status` 会在 session 过期时自动 refresh，`logout` 会先调用 fake logout 再清除本地 session；这些命令不会请求密码，也不会连接 TVCMall 后端。
+
+## Harness 化开发
+
+当前代码按 harness engineering 方式组织：`src/server.ts` 只装配依赖，MCP tool 注册集中在 `src/app/register-tools.ts`；假数据集中放在 `src/fixtures/`；测试支撑放在 `src/harness/`；stdio 集成测试通过真实 MCP JSON-RPC 调用验证 `initialize`、`tools/list` 和 `tools/call`。
+
+常用验证命令：
+
+```bash
+npm test -- tests/integration/mcp-stdio.test.ts
+npm run typecheck
+npm run build
+npm test
+npm pack --dry-run
+```
+
+详细规则见 `docs/harness.md`。
 
 ## 规划中的客户使用方式
 
@@ -105,11 +122,21 @@ tvcmall-mcp/
   src/
     index.ts
     server.ts
+    app/
+      register-tools.ts
     cli/
       login.ts
       logout.ts
       whoami.ts
       install.ts
+    fixtures/
+      products.ts
+      orders.ts
+      tracking.ts
+    harness/
+      mcp-stdio-harness.ts
+      memory-token-store.ts
+      stdio-server.ts
     tools/
       auth-status.ts
       products.ts
@@ -147,8 +174,8 @@ tvcmall-mcp/
 3. 将当前 fake 商品域 tools 替换为真实 `/api/mcp/products/search`、`/api/mcp/products/{id}`、`/api/mcp/shipping/estimate`。
 4. 将当前 fake 订单/物流 tools 替换为真实 `/api/mcp/orders`、`/api/mcp/orders/{id}`、`/api/mcp/orders/{id}/tracking`、`/api/mcp/orders/tracking/batch`。
 5. 将当前 CSV 订单导出扩展为真实订单分页导出，并补充 `xlsx` 实现。
-4. 内部发布 npm beta，用 1-2 个测试账号跑完整链路。
-5. 实现 `install claude`、`install cursor`、`install codex` 自动配置命令。
+6. 内部发布 npm beta，用 1-2 个测试账号跑完整链路。
+7. 实现 `install claude`、`install cursor`、`install codex` 自动配置命令。
 
 ## 参考资料
 

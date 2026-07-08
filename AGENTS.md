@@ -96,6 +96,7 @@ tvcmall-mcp/
 
 - 修改代码时优先补充或更新测试；至少运行与本次修改相关的单元测试或集成测试。
 - 涉及 stdio MCP server 的改动，必须验证 stdout 没有普通日志污染。
+- 涉及 harness、fixtures、tool 注册或 fake client 的改动，优先保持业务行为不变，并同步维护 `docs/harness.md`。
 - 涉及认证、token、日志、导出的改动，必须检查敏感信息不会泄露。
 - 涉及导出功能的改动，必须验证文件名带时间戳、不会覆盖已有文件，并且返回摘要而不是完整表格。
 - 如果当前仓库还没有测试框架，先说明验证方式；新增代码时同步建立最小可运行测试。
@@ -105,5 +106,6 @@ tvcmall-mcp/
 - 项目入口、客户安装和使用说明维护在 `README.md`。
 - 项目方案、实施阶段、验收标准和风险维护在 `docs/mvp-scope.md`。
 - 认证、API、MCP tools、错误码和导出契约维护在 `docs/api-contract.md`。
+- harness engineering 结构、fixtures 规则和集成测试说明维护在 `docs/harness.md`。
 - `docs/tvcmall-customer-mcp-v0.1-implementation.md` 只作为历史实施资料索引，不再维护长篇重复内容。
 - 不要把临时计划、长篇会议记录或一次性分析塞回 `AGENTS.md`。
