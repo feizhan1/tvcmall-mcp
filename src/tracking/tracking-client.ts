@@ -6,11 +6,21 @@ export interface TrackingEvent {
   status: string;
 }
 
+export interface TrackingShippingInfo {
+  carrier: string;
+  service: string;
+  estimated_cost: number;
+  currency: 'USD';
+  estimated_days: string;
+  chargeable_weight_kg?: number;
+}
+
 export interface TrackingInfo {
   order_id: string;
   carrier: string;
   tracking_number: string;
   status: 'label_created' | 'in_transit' | 'delivered' | 'unknown';
+  shipping?: TrackingShippingInfo;
   events: TrackingEvent[];
 }
 

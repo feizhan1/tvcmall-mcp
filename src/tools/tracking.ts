@@ -20,6 +20,14 @@ const TrackingInfoSchema = z.object({
   carrier: z.string(),
   tracking_number: z.string(),
   status: z.enum(['label_created', 'in_transit', 'delivered', 'unknown']),
+  shipping: z.object({
+    carrier: z.string(),
+    service: z.string(),
+    estimated_cost: z.number(),
+    currency: z.literal('USD'),
+    estimated_days: z.string(),
+    chargeable_weight_kg: z.number().optional()
+  }).optional(),
   events: z.array(z.object({
     time: z.string(),
     location: z.string(),
@@ -56,7 +64,7 @@ export async function getTrackingInfoForMcp(input: GetTrackingInfoInput, depende
   }
 
   return {
-    content: [{ type: 'text', text: `${tracking.order_id} - ${tracking.carrier} - ${tracking.status}` }],
+    content: [{ type: 'text', text: formatTrackingSummary(tracking) }],
     structuredContent: { ...tracking }
   };
 }
@@ -77,4 +85,9 @@ export async function batchGetTrackingForMcp(input: BatchGetTrackingInput, depen
 
 function authRequiredResult(): CallToolResult {
   return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.AUTH_REQUIRED }] };
+}
+
+function formatTrackingSummary(tracking: z.infer<typeof TrackingInfoSchema>): string {
+  const shipping = tracking.shipping ? ` - 运费：${tracking.shipping.currency} ${tracking.shipping.estimated_cost.toFixed(2)}` : '';
+  return `${tracking.order_id} - ${tracking.carrier} - ${tracking.status}${shipping}`;
 }

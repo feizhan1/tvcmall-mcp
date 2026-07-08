@@ -21,6 +21,7 @@
 查询我最近 10 个订单
 导出上个月已发货订单
 批量查询这些订单的物流状态
+查询订单 V24011000008 的物流和运费
 ```
 
 ## 3. 已确定方案
@@ -82,9 +83,9 @@ npx @tvcmall/mcp install claude
 - `tvcmall_get_product_detail`：查看商品详情。
 - `tvcmall_estimate_shipping`：估算运费。
 - `tvcmall_list_orders`：查询订单列表。
-- `tvcmall_get_order_detail`：查询订单详情。
-- `tvcmall_get_tracking_info`：查询单个订单物流。
-- `tvcmall_batch_get_tracking`：批量查询物流。
+- `tvcmall_get_order_detail`：查询订单商品、金额、地址等详情。
+- `tvcmall_get_tracking_info`：查询单个订单物流和订单运费。
+- `tvcmall_batch_get_tracking`：批量查询物流和可用的订单运费信息。
 - `tvcmall_export_orders`：导出订单到本地文件。
 
 ### 不包含
@@ -152,7 +153,7 @@ tvcmall-orders-20260707-153000.csv
 
 - 实现 `tvcmall_list_orders`。
 - 实现 `tvcmall_get_order_detail`。
-- 实现 `tvcmall_get_tracking_info`。
+- 实现 `tvcmall_get_tracking_info`，并让订单物流和订单运费都通过该工具查询。
 - 实现 `tvcmall_batch_get_tracking`。
 - 加权限校验和 PII 脱敏策略。
 
@@ -180,7 +181,7 @@ MVP 完成标准：
 - 未登录时 tools 返回明确引导。
 - access token 过期后可自动 refresh。
 - 可搜索商品、查看商品详情、估算运费。
-- 可查询订单列表、订单详情、物流信息。
+- 可查询订单列表、订单详情、物流和订单运费信息。
 - 可批量查询物流。
 - 可导出订单到本地 `xlsx` / `csv` 文件。
 - 不保存明文密码。
@@ -201,6 +202,6 @@ MVP 完成标准：
 
 1. 后端先定义 MCP Auth API 契约，尤其是 token、scope、refresh、logout。
 2. 工具侧已初始化 `@tvcmall/mcp` 空壳；下一步接入真实 MCP Auth API。
-3. 并行确认商品、订单、物流、运费接口是否能用 Bearer token 调用。
+3. 并行确认商品、订单、物流、运费接口是否能用 Bearer token 调用；订单级物流和运费统一映射到 `tvcmall_get_tracking_info`。
 4. 先内部发布 npm beta，找 1-2 个测试账号跑完整链路。
 5. 最后再做 `install claude/cursor/codex` 的自动配置命令。

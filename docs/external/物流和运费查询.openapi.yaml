@@ -7,9 +7,9 @@ tags: []
 paths:
   /order/getlogisticstracking:
     get:
-      summary: 运费查询
+      summary: 物流和运费查询
       deprecated: false
-      description: ''
+      description: '按订单号查询物流轨迹，并在接口返回时同时提供订单级运费信息。MCP 中应映射到 tvcmall_get_tracking_info。'
       tags: []
       parameters:
         - name: orderId
@@ -21,7 +21,7 @@ paths:
             type: string
         - name: Authorization
           in: header
-          description: ''
+          description: 登录后获取的 access token，HTTP 请求头需直接设置为该 token。
           example: login-access-token-example
           schema:
             type: string

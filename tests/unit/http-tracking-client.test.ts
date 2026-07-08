@@ -79,4 +79,87 @@ describe('HttpTrackingClient', () => {
       ]
     });
   });
+
+  it('maps real package tracking payloads returned by TVCMall logistics endpoint', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      data: {
+        packages: [
+          {
+            TrackingNumber: 'YT2430621266059602',
+            CourierNumber: 'dhl',
+            ShippingFee: '18.60',
+            Currency: 'USD',
+            ServiceName: 'Logistics Tracking',
+            ChargeableWeight: '1.2',
+            EstimateDeliveryTime: '7-12 days',
+            updateddate: '2025-11-24 06:52:05',
+            TrackingInfo: {
+              message: 'ok',
+              nu: 'YT2430621266059602',
+              ischeck: '1',
+              condition: 'F00',
+              com: 'yuntrack',
+              status: '200',
+              state: '3',
+              data: [
+                {
+                  time: '2024-11-17 17:31:07',
+                  ftime: '2024-11-17 17:31:07',
+                  context: 'Delivered'
+                },
+                {
+                  time: '2024-11-12 08:29:34',
+                  ftime: '2024-11-12 08:29:34',
+                  context: 'In delivery process'
+                }
+              ]
+            }
+          }
+        ]
+      },
+      code: 200,
+      message: '',
+      success: true,
+      detailcode: ''
+    }));
+    const client = new HttpTrackingClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const result = await client.getTrackingInfo('V24011000008', session);
+
+    expect(result).toEqual({
+      order_id: 'V24011000008',
+      carrier: 'dhl',
+      tracking_number: 'YT2430621266059602',
+      status: 'delivered',
+      shipping: {
+        carrier: 'dhl',
+        service: 'Logistics Tracking',
+        estimated_cost: 18.6,
+        currency: 'USD',
+        estimated_days: '7-12 days',
+        chargeable_weight_kg: 1.2
+      },
+      events: [
+        { time: '2024-11-17 17:31:07', location: '', status: 'Delivered' },
+        { time: '2024-11-12 08:29:34', location: '', status: 'In delivery process' }
+      ]
+    });
+  });
+
+  it('returns null when the real logistics endpoint has no packages', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      data: {
+        packages: []
+      },
+      code: 200,
+      message: '',
+      success: true,
+      detailcode: ''
+    }));
+    const client = new HttpTrackingClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const result = await client.getTrackingInfo('V10001', session);
+
+    expect(result).toBeNull();
+  });
 });

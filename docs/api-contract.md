@@ -8,7 +8,8 @@
 - 登录、登出、查看当前账号等交互动作通过独立 CLI 完成。
 - MCP stdio 通道只承载 JSON-RPC 协议内容，不能被普通日志污染。
 - 后端返回的大对象需要在本地 MCP server 中整理为 AI 友好摘要。
-- 所有涉及订单、物流、导出的接口都要考虑权限、审计、限流和 PII 脱敏。
+- 所有涉及订单、物流、运费、导出的接口都要考虑权限、审计、限流和 PII 脱敏。
+- 订单号场景下的物流和运费都通过 `tvcmall_get_tracking_info` 承载，避免 MCP Client 把订单运费误路由到订单详情或商品运费预估工具。
 
 ## 2. 本地 CLI 命令
 
@@ -226,11 +227,14 @@ tvcmall_export_orders
 
 ### tvcmall_estimate_shipping
 
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。`fake` 模式支持按目的国家和商品估算运费；`real` 模式调用真实 `/order/getlogisticstracking`，需要提供 `order_id` 查询订单运费。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。本 tool 面向“未下单商品 + 目的国家”的运费预估，不作为订单号运费入口；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，MCP Client 必须调用 `tvcmall_get_tracking_info`。
 
 ```json
 {
-  "order_id": "V26030900012"
+  "destination_country": "US",
+  "items": [
+    { "product_id": "prd_iphone_case_001", "quantity": 10 }
+  ]
 }
 ```
 
@@ -275,7 +279,7 @@ tvcmall_export_orders
 
 ### tvcmall_get_order_detail
 
-当前实现使用本地假订单详情数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，找不到订单返回 `ORDER_NOT_FOUND`。后续替换为真实 `/api/mcp/orders/{id}`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，找不到订单返回 `ORDER_NOT_FOUND`。本 tool 用于订单商品、金额、地址等详情；订单物流和订单运费查询请使用 `tvcmall_get_tracking_info`。
 
 ```json
 {
@@ -285,17 +289,37 @@ tvcmall_export_orders
 
 ### tvcmall_get_tracking_info
 
-当前实现使用本地假物流数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，找不到物流返回 `TRACKING_NOT_FOUND`。后续替换为真实 `/api/mcp/orders/{id}/tracking`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，找不到物流返回 `TRACKING_NOT_FOUND`。`fake` 模式使用本地物流 fixtures，`real` 模式调用真实 `/order/getlogisticstracking`。当用户询问订单物流、物流轨迹、订单运费、shipping fee、freight 或 delivery cost 时，优先使用本 tool。
 
 ```json
 {
-  "order_id": "V10001"
+  "order_id": "V24011000008"
+}
+```
+
+结构化输出包含物流承运商、运单号、轨迹事件，并在真实接口返回运费字段时包含可选 `shipping`：
+
+```json
+{
+  "order_id": "V24011000008",
+  "carrier": "dhl",
+  "tracking_number": "YT2430621266059602",
+  "status": "delivered",
+  "shipping": {
+    "carrier": "dhl",
+    "service": "Logistics Tracking",
+    "estimated_cost": 18.6,
+    "currency": "USD",
+    "estimated_days": "7-12 days",
+    "chargeable_weight_kg": 1.2
+  },
+  "events": []
 }
 ```
 
 ### tvcmall_batch_get_tracking
 
-当前实现使用本地假物流数据，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，单次最多 50 个订单。后续替换为真实 `/api/mcp/orders/tracking/batch`。
+当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，单次最多 50 个订单。批量输出同样可以包含每个订单的可选 `shipping`。单个订单物流或运费优先使用 `tvcmall_get_tracking_info`。
 
 ```json
 {

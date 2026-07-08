@@ -139,6 +139,7 @@ paths:
     get:
       tags: [Logistics]
       summary: 物流和运费查询
+      description: 按订单号查询物流轨迹，并在接口返回时同时提供订单级运费信息；MCP 中映射到 tvcmall_get_tracking_info。
       operationId: getLogisticsTracking
       parameters:
         - $ref: '#/components/parameters/AccessTokenAuthorizationHeader'

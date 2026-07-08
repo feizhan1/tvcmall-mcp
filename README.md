@@ -2,7 +2,7 @@
 
 TVCMall Customer MCP 是面向 TVCMall 客户、采购商、分销商和店铺运营人员的本地 MCP server。客户在自己的电脑上安装后，可以通过 Claude、Cursor、Codex 或其他 MCP Client 查询 TVCMall 商品、订单、物流，并将订单导出为本地文件。
 
-> 当前状态：v0.1 最小 TypeScript 骨架已初始化，已包含 stdio MCP server、商品域假数据 tools、订单/物流假数据 tools、`tvcmall_export_orders` CSV 假数据导出、基础 CLI、系统凭证库 token store、fake auth 的 login/refresh/logout/me、过期自动 refresh、测试与构建脚本。真实业务 API 仍待接入。
+> 当前状态：v0.1 TypeScript 骨架已初始化，已包含 stdio MCP server、商品/订单/积分/物流 tools、`tvcmall_export_orders` CSV 导出、基础 CLI、系统凭证库 token store、fake auth 的 login/refresh/logout/me、过期自动 refresh、真实 HTTP client 装配开关、测试与构建脚本。
 
 ## 文档地图
 
@@ -19,10 +19,10 @@ v0.1 是客户侧本地 MCP，默认只读。
 首批能力：
 
 - 商品查询：搜索商品、查看商品详情。
-- 运费估算：根据商品和目的地估算运输费用。
+- 运费估算：根据商品和目的地估算未下单商品运输费用；已下单订单的运费通过物流查询工具返回。
 - 订单查询：查看订单列表和订单详情。
 - 积分查询：查看客户积分和积分记录。
-- 物流查询：查询单个或批量订单的物流状态。
+- 物流查询：查询单个或批量订单的物流状态，并承载订单级运费查询。
 - 订单导出：将订单导出为本地 `xlsx` 或 `csv` 文件。
 
 v0.1 不做：
@@ -116,6 +116,7 @@ MCP Client 配置目标示例：
 查询我最近 10 个订单
 导出上个月已发货订单
 批量查询这些订单的物流状态
+查询订单 V24011000008 的物流和运费
 ```
 
 ## 安全原则
@@ -126,7 +127,7 @@ MCP Client 配置目标示例：
 - 普通日志写入 stderr 或日志文件。
 - 不保存明文密码。
 - 不在日志、stdout 或 AI 对话中输出 access token、refresh token、密码、完整地址、电话等敏感信息。
-- 订单详情、物流信息和导出文件必须遵循后端权限与脱敏策略。
+- 订单详情、物流/运费信息和导出文件必须遵循后端权限与脱敏策略。
 
 ## 推荐技术栈
 
@@ -202,7 +203,7 @@ tvcmall-mcp/
 1. 确认后端 MCP Auth API 契约，尤其是 token、scope、refresh、logout。
 2. 将当前 fake login 替换为真实 `/api/mcp/auth/login`、`refresh`、`logout`、`me` 接口。
 3. 将当前 fake 商品域 tools 替换为真实 `/api/mcp/products/search`、`/api/mcp/products/{id}`、`/api/mcp/shipping/estimate`。
-4. 将当前 fake 订单/物流 tools 替换为真实 `/api/mcp/orders`、`/api/mcp/orders/{id}`、`/api/mcp/orders/{id}/tracking`、`/api/mcp/orders/tracking/batch`。
+4. 将当前订单/物流 tools 继续对齐真实 API；订单物流和订单运费统一通过 `tvcmall_get_tracking_info` 查询。
 5. 将当前 CSV 订单导出扩展为真实订单分页导出，并补充 `xlsx` 实现。
 6. 内部发布 npm beta，用 1-2 个测试账号跑完整链路。
 7. 实现 `install claude`、`install cursor`、`install codex` 自动配置命令。

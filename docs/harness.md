@@ -76,6 +76,7 @@ stdio 相关测试必须关注两点：
 - token、密码和客户 PII 不属于运行时环境变量，继续通过 CLI 和系统凭证库管理；`TVCMALL_API_AUTHORIZATION` 如为敏感部署凭据，只能通过本机环境或部署注入。
 - 真实登录逻辑从 `src/auth/http-auth-client.ts` 和 CLI `login` 命令接入，当前仅覆盖 `docs/external/登录.openapi.yaml` 中已提供的 `/user/login`；默认 fake 模式仍不请求密码。
 - 设置 `TVCMALL_DATA_SOURCE=real` 后，server 会对 auth、商品、订单、积分、物流和运费能力装配 HTTP clients；商品、订单、积分、物流和运费 clients 的 `Authorization` header 必须来自 `StoredAuthSession.accessToken`，不能复用 `TVCMALL_API_AUTHORIZATION`。
+- 订单号场景下的物流和运费统一落在 `TrackingClient.getTrackingInfo` / `tvcmall_get_tracking_info`；`tvcmall_estimate_shipping` 只作为未下单商品按目的地预估的入口，避免 MCP Client 误选订单详情或运费预估工具。
 
 ## 验证基线
 

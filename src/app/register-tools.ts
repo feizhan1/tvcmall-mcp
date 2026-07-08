@@ -81,7 +81,7 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_estimate_shipping',
-    { title: 'TVCMall Estimate Shipping', description: '使用假数据估算 TVCMall 运费，后续替换为真实运费 API', inputSchema: EstimateShippingInputSchema, outputSchema: EstimateShippingOutputSchema },
+    { title: 'TVCMall Estimate Shipping', description: '按目的国家和商品预估未下单商品运费；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，请不要调用本工具，必须使用 tvcmall_get_tracking_info。', inputSchema: EstimateShippingInputSchema, outputSchema: EstimateShippingOutputSchema },
     async (input) => estimateShippingForMcp(input, { tokenStore, authClient, shippingClient })
   );
 
@@ -93,19 +93,19 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_get_order_detail',
-    { title: 'TVCMall Get Order Detail', description: '使用假数据查询 TVCMall 订单详情，后续替换为真实订单详情 API', inputSchema: GetOrderDetailInputSchema, outputSchema: OrderDetailOutputSchema },
+    { title: 'TVCMall Get Order Detail', description: '查询 TVCMall 订单商品、金额、地址等详情；订单物流和运费查询请使用 tvcmall_get_tracking_info。', inputSchema: GetOrderDetailInputSchema, outputSchema: OrderDetailOutputSchema },
     async (input) => getOrderDetailForMcp(input, { tokenStore, authClient, orderClient })
   );
 
   server.registerTool(
     'tvcmall_get_tracking_info',
-    { title: 'TVCMall Get Tracking Info', description: '使用假数据查询单个订单物流，后续替换为真实物流 API', inputSchema: GetTrackingInfoInputSchema, outputSchema: TrackingInfoOutputSchema },
+    { title: 'TVCMall Get Tracking Info', description: '查询单个 TVCMall 订单的物流和运费信息。当用户询问订单物流、物流轨迹、运费、shipping fee、freight、delivery cost 时，优先使用本工具。', inputSchema: GetTrackingInfoInputSchema, outputSchema: TrackingInfoOutputSchema },
     async (input) => getTrackingInfoForMcp(input, { tokenStore, authClient, trackingClient })
   );
 
   server.registerTool(
     'tvcmall_batch_get_tracking',
-    { title: 'TVCMall Batch Get Tracking', description: '使用假数据批量查询订单物流，后续替换为真实批量物流 API', inputSchema: BatchGetTrackingInputSchema, outputSchema: BatchTrackingOutputSchema },
+    { title: 'TVCMall Batch Get Tracking', description: '批量查询 TVCMall 订单物流和运费信息；单个订单物流或运费优先使用 tvcmall_get_tracking_info。', inputSchema: BatchGetTrackingInputSchema, outputSchema: BatchTrackingOutputSchema },
     async (input) => batchGetTrackingForMcp(input, { tokenStore, authClient, trackingClient })
   );
 
