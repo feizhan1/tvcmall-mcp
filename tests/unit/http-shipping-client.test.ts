@@ -26,7 +26,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpShippingClient', () => {
-  it('computes product destination shipping with sku body query and login token Authorization header', async () => {
+  it('computes product destination shipping with sku body query and Bearer access token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         countrycode: 'AO',
@@ -60,7 +60,7 @@ describe('HttpShippingClient', () => {
       countrycode: 'AO'
     });
     expect(init.method).toBe('GET');
-    expect(init.headers).toMatchObject({ Authorization: 'login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
     expect(result).toEqual({
       destination_country: 'AO',
       currency: 'USD',

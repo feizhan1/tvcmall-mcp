@@ -25,7 +25,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpTrackingClient', () => {
-  it('gets order logistics tracking with the login token Authorization header', async () => {
+  it('gets order logistics tracking with a Bearer access token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         orderId: 'V26030900012',
@@ -48,7 +48,7 @@ describe('HttpTrackingClient', () => {
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/order/getlogisticstracking');
     expect(parsedUrl.searchParams.get('orderId')).toBe('V26030900012');
     expect(init.method).toBe('GET');
-    expect(init.headers).toMatchObject({ Authorization: 'login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
     expect(result).toEqual({
       order_id: 'V26030900012',
       carrier: 'DHL',

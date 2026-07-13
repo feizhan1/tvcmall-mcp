@@ -25,7 +25,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpPointsClient', () => {
-  it('gets customer points through the documented endpoint using the login token Authorization header', async () => {
+  it('gets customer points through the documented endpoint using a Bearer access token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         availablePoints: 120,
@@ -40,7 +40,7 @@ describe('HttpPointsClient', () => {
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://api.tvcmall.test/v3/user/points/stat');
-    expect(init.headers).toMatchObject({ Authorization: 'login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
     expect(result).toEqual({
       available_points: 120,
       pending_points: 5,
@@ -49,7 +49,7 @@ describe('HttpPointsClient', () => {
     });
   });
 
-  it('lists points records through the documented endpoint using the login token Authorization header', async () => {
+  it('lists points records through the documented endpoint using a Bearer access token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         total: 1,
@@ -67,7 +67,7 @@ describe('HttpPointsClient', () => {
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/v3/user/points/list');
     expect(parsedUrl.searchParams.get('pageindex')).toBe('3');
     expect(parsedUrl.searchParams.get('pagesize')).toBe('10');
-    expect(init.headers).toMatchObject({ Authorization: 'login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
     expect(result).toEqual({
       page: 3,
       page_size: 10,

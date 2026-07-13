@@ -25,7 +25,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpProductClient', () => {
-  it('searches products through the documented endpoint using the login token Authorization header', async () => {
+  it('searches products through the documented endpoint using a Bearer access token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         total: 1,
@@ -56,7 +56,7 @@ describe('HttpProductClient', () => {
       keywords: 'iphone case',
       url: '/search'
     });
-    expect(init.headers).toMatchObject({ Authorization: 'login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
     expect(result).toEqual({
       query: 'iphone case',
       page: 2,
@@ -77,7 +77,7 @@ describe('HttpProductClient', () => {
     });
   });
 
-  it('gets product detail through the documented endpoint using the login token Authorization header', async () => {
+  it('gets product detail through the documented endpoint using a Bearer access token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         productId: 'prd_1',
@@ -104,7 +104,7 @@ describe('HttpProductClient', () => {
     const parsedUrl = new URL(url);
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/v3/productdetail/detail');
     expect(JSON.parse(parsedUrl.searchParams.get('body') ?? '{}')).toEqual({ url: '/details/camera-bag.html' });
-    expect(init.headers).toMatchObject({ Authorization: 'login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
     expect(detail).toMatchObject({
       id: 'prd_1',
       sku: 'SKU-1',

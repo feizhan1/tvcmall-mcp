@@ -25,7 +25,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpOrderClient', () => {
-  it('lists orders through the documented endpoint using the login token Authorization header', async () => {
+  it('lists orders through the documented endpoint using a Bearer access token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         total: 1,
@@ -49,7 +49,7 @@ describe('HttpOrderClient', () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://api.tvcmall.test/v3/user/getorders');
     expect(init.method).toBe('POST');
-    expect(init.headers).toMatchObject({ Authorization: 'login-access-token', 'Content-Type': 'application/json' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token', 'Content-Type': 'application/json' });
     expect(JSON.parse(init.body as string)).toEqual({
       keywords: '',
       pageindex: 1,
@@ -74,7 +74,7 @@ describe('HttpOrderClient', () => {
     });
   });
 
-  it('gets order detail through the documented endpoint using the login token Authorization header', async () => {
+  it('gets order detail through the documented endpoint using a Bearer access token Authorization header', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         orderId: 'M24072400005',
@@ -100,7 +100,7 @@ describe('HttpOrderClient', () => {
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/v3/order/detail');
     expect(parsedUrl.searchParams.get('orderId')).toBe('M24072400005');
     expect(init.method).toBe('POST');
-    expect(init.headers).toMatchObject({ Authorization: 'login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
     expect(detail).toEqual({
       id: 'M24072400005',
       status: 'delivered',

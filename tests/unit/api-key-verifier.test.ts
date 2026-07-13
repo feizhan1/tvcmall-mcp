@@ -73,4 +73,36 @@ describe('HttpApiKeyVerifier', () => {
 
     await expect(verifier.verify('user-api-key')).rejects.toBeInstanceOf(ApiKeyVerificationUnavailableError);
   });
+
+  it('maps an AbortError caused by verification timeout to a safe unavailable error', async () => {
+    const verifier = new HttpApiKeyVerifier({
+      verifyUrl: 'https://auth.test/verify',
+      timeoutMs: 1,
+      fetch: vi.fn((_url, init) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          const error = new Error('verification request timed out');
+          error.name = 'AbortError';
+          reject(error);
+        }, { once: true });
+      }))
+    });
+
+    await expect(verifier.verify('user-api-key')).rejects.toBeInstanceOf(ApiKeyVerificationUnavailableError);
+  });
+
+  it.each([
+    ['missing customer ID', { customer: { displayName: 'TVCMall Buyer' } }],
+    ['blank customer ID', { customer: { id: '   ', displayName: 'TVCMall Buyer' } }],
+    ['missing display name', { customer: { id: 'customer_123' } }],
+    ['blank display name', { customer: { id: 'customer_123', displayName: '   ' } }],
+    ['missing upstream access token', { upstreamAccessToken: undefined }],
+    ['blank upstream access token', { upstreamAccessToken: '   ' }]
+  ])('rejects a response with %s', async (_description, overrides) => {
+    const verifier = new HttpApiKeyVerifier({
+      verifyUrl: 'https://auth.test/verify',
+      fetch: vi.fn(async () => verificationResponse(overrides))
+    });
+
+    await expect(verifier.verify('user-api-key')).rejects.toBeInstanceOf(ApiKeyVerificationUnavailableError);
+  });
 });
