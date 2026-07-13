@@ -35,6 +35,16 @@ export class ApiKeyVerificationUnavailableError extends Error {
   }
 }
 
+export class ApiKeyVerificationRateLimitedError extends Error {
+  readonly retryAfter: number | undefined;
+
+  constructor(retryAfter: number | undefined) {
+    super('API Key 验证请求过于频繁');
+    this.name = 'ApiKeyVerificationRateLimitedError';
+    this.retryAfter = retryAfter;
+  }
+}
+
 export class HttpApiKeyVerifier implements ApiKeyVerifier {
   private readonly verifyUrl: string;
   private readonly timeoutMs: number;
@@ -66,6 +76,9 @@ export class HttpApiKeyVerifier implements ApiKeyVerifier {
       if (response.status === 401 || response.status === 403) {
         throw new InvalidApiKeyError();
       }
+      if (response.status === 429) {
+        throw new ApiKeyVerificationRateLimitedError(readRetryAfter(response.headers));
+      }
       if (!response.ok) throw new ApiKeyVerificationUnavailableError();
 
       const body = await response.json();
@@ -81,7 +94,9 @@ export class HttpApiKeyVerifier implements ApiKeyVerifier {
         apiKeyFingerprint: fingerprintApiKey(normalizedApiKey)
       };
     } catch (error) {
-      if (error instanceof InvalidApiKeyError || error instanceof ApiKeyVerificationUnavailableError) {
+      if (error instanceof InvalidApiKeyError
+        || error instanceof ApiKeyVerificationRateLimitedError
+        || error instanceof ApiKeyVerificationUnavailableError) {
         throw error;
       }
       throw new ApiKeyVerificationUnavailableError();
@@ -89,4 +104,13 @@ export class HttpApiKeyVerifier implements ApiKeyVerifier {
       clearTimeout(timeout);
     }
   }
+}
+
+function readRetryAfter(headers: Headers): number | undefined {
+  const value = headers.get('retry-after');
+  if (!value?.trim()) return undefined;
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return undefined;
+  return Math.min(parsed, 3600);
 }

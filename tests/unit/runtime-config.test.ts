@@ -2,8 +2,34 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_RUNTIME_CONFIG, loadRuntimeConfig } from '../../src/config/runtime-config.js';
 
 describe('runtime config', () => {
-  it('uses safe defaults when env is empty', () => {
-    expect(loadRuntimeConfig({})).toEqual(DEFAULT_RUNTIME_CONFIG);
+  it.each([
+    ['is missing', {}],
+    ['is blank', { TVCMALL_API_KEY_VERIFY_URL: '   ' }],
+    ['uses HTTP', { TVCMALL_API_KEY_VERIFY_URL: 'http://auth.tvcmall.test/verify' }],
+    ['is not a valid URL', { TVCMALL_API_KEY_VERIFY_URL: 'not a URL' }]
+  ])('rejects a production API Key verification URL that %s', (_description, env) => {
+    expect(() => loadRuntimeConfig(env)).toThrow(/TVCMALL_API_KEY_VERIFY_URL/);
+  });
+
+  it('allows an HTTP verification URL only with the explicit non-production development switch', () => {
+    expect(loadRuntimeConfig({
+      TVCMALL_API_ENV: 'sandbox',
+      TVCMALL_API_KEY_VERIFY_URL: 'http://auth.tvcmall.test/verify',
+      TVCMALL_ALLOW_INSECURE_API_KEY_VERIFY_URL_FOR_DEVELOPMENT: 'true'
+    }).apiKeyVerifyUrl).toBe('http://auth.tvcmall.test/verify');
+  });
+
+  it.each([
+    ['the development switch is absent', {
+      TVCMALL_API_ENV: 'sandbox',
+      TVCMALL_API_KEY_VERIFY_URL: 'http://auth.tvcmall.test/verify'
+    }],
+    ['the environment is production', {
+      TVCMALL_API_KEY_VERIFY_URL: 'http://auth.tvcmall.test/verify',
+      TVCMALL_ALLOW_INSECURE_API_KEY_VERIFY_URL_FOR_DEVELOPMENT: 'true'
+    }]
+  ])('rejects an HTTP verification URL when %s', (_description, env) => {
+    expect(() => loadRuntimeConfig(env)).toThrow(/TVCMALL_API_KEY_VERIFY_URL/);
   });
 
   it('loads HTTP API settings from environment variables', () => {
@@ -42,14 +68,22 @@ describe('runtime config', () => {
     expect(loadRuntimeConfig({
       TVCMALL_API_TIMEOUT_MS: '-1',
       TVCMALL_API_ENV: 'qa',
-      TVCMALL_LOG_LEVEL: 'verbose'
-    })).toEqual(DEFAULT_RUNTIME_CONFIG);
+      TVCMALL_LOG_LEVEL: 'verbose',
+      TVCMALL_API_KEY_VERIFY_URL: 'https://auth.tvcmall.test/verify'
+    })).toEqual({
+      ...DEFAULT_RUNTIME_CONFIG,
+      apiKeyVerifyUrl: 'https://auth.tvcmall.test/verify'
+    });
   });
 
   it('ignores blank optional values', () => {
     expect(loadRuntimeConfig({
       TVCMALL_API_BASE_URL: '   ',
-      TVCMALL_EXPORT_DIR: '   '
-    })).toEqual(DEFAULT_RUNTIME_CONFIG);
+      TVCMALL_EXPORT_DIR: '   ',
+      TVCMALL_API_KEY_VERIFY_URL: 'https://auth.tvcmall.test/verify'
+    })).toEqual({
+      ...DEFAULT_RUNTIME_CONFIG,
+      apiKeyVerifyUrl: 'https://auth.tvcmall.test/verify'
+    });
   });
 });

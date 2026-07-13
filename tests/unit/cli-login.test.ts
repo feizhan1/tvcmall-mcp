@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { runCli } from '../../src/cli/app.js';
 import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
 
+const testEnv = { TVCMALL_API_KEY_VERIFY_URL: 'https://auth.test/verify' };
+
 class MemoryTokenStore implements TokenStore {
   public session: StoredAuthSession | null = null;
 
@@ -59,7 +61,7 @@ describe('login command with fake data', () => {
     const tokenStore = new MemoryTokenStore();
     const stdout = new StringOutput();
 
-    await runCli(['login'], { tokenStore, stdout, env: { TVCMALL_DATA_SOURCE: 'fake' } });
+    await runCli(['login'], { tokenStore, stdout, env: { ...testEnv, TVCMALL_DATA_SOURCE: 'fake' } });
 
     expect(tokenStore.session).toMatchObject({
       customer: {
@@ -82,9 +84,9 @@ describe('login command with fake data', () => {
     const tokenStore = new MemoryTokenStore();
     const stdout = new StringOutput();
 
-    await runCli(['login'], { tokenStore, stdout, env: { TVCMALL_DATA_SOURCE: 'fake' } });
+    await runCli(['login'], { tokenStore, stdout, env: { ...testEnv, TVCMALL_DATA_SOURCE: 'fake' } });
     stdout.value = '';
-    await runCli(['whoami'], { tokenStore, stdout, env: { TVCMALL_DATA_SOURCE: 'fake' } });
+    await runCli(['whoami'], { tokenStore, stdout, env: { ...testEnv, TVCMALL_DATA_SOURCE: 'fake' } });
 
     expect(stdout.value).toContain('fake.customer@example.com');
     expect(stdout.value).toContain('products:read');
@@ -101,7 +103,7 @@ describe('login command with fake data', () => {
       tokenStore,
       stdout,
       authClient,
-      env: { TVCMALL_DATA_SOURCE: 'real' }
+      env: { ...testEnv, TVCMALL_DATA_SOURCE: 'real' }
     });
 
     expect(authClient.loginInput).toEqual({

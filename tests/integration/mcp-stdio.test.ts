@@ -11,7 +11,8 @@ describe('MCP stdio harness', () => {
   it('lists tools and returns auth-required for protected tools without polluting stderr', async () => {
     const harness = await createMcpStdioHarness({
       command: process.execPath,
-      args: ['--import', 'tsx', 'src/harness/stdio-server.ts']
+      args: ['--import', 'tsx', 'src/harness/stdio-server.ts'],
+      env: { TVCMALL_API_KEY_VERIFY_URL: 'https://auth.test/verify' }
     });
     harnesses.push(harness);
 

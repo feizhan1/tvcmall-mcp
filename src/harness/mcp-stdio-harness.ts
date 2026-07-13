@@ -6,6 +6,7 @@ export interface McpStdioHarnessOptions {
   command: string;
   args: string[];
   cwd?: string;
+  env?: NodeJS.ProcessEnv;
   startupTimeoutMs?: number;
   requestTimeoutMs?: number;
 }
@@ -28,7 +29,7 @@ export async function createMcpStdioHarness(options: McpStdioHarnessOptions): Pr
   const child = spawn(options.command, options.args, {
     cwd: options.cwd ?? process.cwd(),
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: process.env
+    env: { ...process.env, ...options.env }
   });
 
   const harness = new ChildProcessMcpStdioHarness(child, options.requestTimeoutMs ?? 5000);

@@ -64,7 +64,12 @@ describe('logout command', () => {
     const authClient = new RecordingAuthClient();
     const stdout = new StringOutput();
 
-    await runCli(['logout'], { tokenStore, authClient, stdout });
+    await runCli(['logout'], {
+      tokenStore,
+      authClient,
+      stdout,
+      env: { TVCMALL_API_KEY_VERIFY_URL: 'https://auth.test/verify' }
+    });
 
     expect(authClient.loggedOutSession).toEqual(session);
     expect(tokenStore.cleared).toBe(true);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTvcMallMcpServer } from '../../src/server.js';
 import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
 
@@ -13,6 +13,17 @@ class FakeTokenStore implements TokenStore {
 }
 
 describe('createTvcMallMcpServer', () => {
+  const previousVerifyUrl = process.env.TVCMALL_API_KEY_VERIFY_URL;
+
+  beforeEach(() => {
+    process.env.TVCMALL_API_KEY_VERIFY_URL = 'https://auth.test/verify';
+  });
+
+  afterEach(() => {
+    if (previousVerifyUrl === undefined) delete process.env.TVCMALL_API_KEY_VERIFY_URL;
+    else process.env.TVCMALL_API_KEY_VERIFY_URL = previousVerifyUrl;
+  });
+
   it('registers the tvcmall_auth_status tool before connecting a transport', () => {
     const server = createTvcMallMcpServer({ tokenStore: new FakeTokenStore() });
     const registeredTools = (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools;

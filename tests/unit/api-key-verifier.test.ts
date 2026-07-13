@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  ApiKeyVerificationRateLimitedError,
   ApiKeyVerificationUnavailableError,
   HttpApiKeyVerifier,
   InvalidApiKeyError
@@ -48,6 +49,18 @@ describe('HttpApiKeyVerifier', () => {
     });
 
     await expect(verifier.verify('revoked-api-key')).rejects.toBeInstanceOf(InvalidApiKeyError);
+  });
+
+  it('maps verification status 429 to a distinct rate-limited error with a safe retryAfter value', async () => {
+    const verifier = new HttpApiKeyVerifier({
+      verifyUrl: 'https://auth.test/verify',
+      fetch: vi.fn(async () => new Response(null, { status: 429, headers: { 'retry-after': '30' } }))
+    });
+
+    const error = await verifier.verify('user-api-key').catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(ApiKeyVerificationRateLimitedError);
+    expect(error).not.toBeInstanceOf(ApiKeyVerificationUnavailableError);
+    expect((error as ApiKeyVerificationRateLimitedError).retryAfter).toBe(30);
   });
 
   it.each([
