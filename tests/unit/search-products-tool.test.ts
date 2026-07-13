@@ -1,71 +1,35 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { searchProductsForMcp } from '../../src/tools/products.js';
-import { FakeAuthClient } from '../../src/auth/fake-auth-client.js';
 import { FakeProductClient } from '../../src/products/fake-product-client.js';
-import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
 
-class MemoryTokenStore implements TokenStore {
-  constructor(public session: StoredAuthSession | null) {}
-
-  async getSession(): Promise<StoredAuthSession | null> {
-    return this.session;
-  }
-
-  async saveSession(session: StoredAuthSession): Promise<void> {
-    this.session = session;
-  }
-
-  async clearSession(): Promise<void> {
-    this.session = null;
-  }
-}
-
-const activeSession: StoredAuthSession = {
-  customer: { id: 'fake_cus_001', email: 'fake.customer@example.com' },
-  scopes: ['products:read'],
-  accessToken: 'fake-access-token',
-  refreshToken: 'fake-refresh-token',
-  tokenType: 'Bearer',
-  expiresAt: '2026-07-07T12:00:00.000Z'
+const authContext = {
+  customerId: 'customer_123', displayName: 'TVCMall Buyer', scopes: ['products:read'],
+  upstreamAccessToken: 'short-lived-token', expiresAt: '2030-01-01T00:00:00.000Z', apiKeyFingerprint: 'fingerprint'
 };
 
 describe('searchProductsForMcp', () => {
-  it('returns AUTH_REQUIRED when no session exists', async () => {
-    const result = await searchProductsForMcp(
-      { query: 'iphone case', page: 1, page_size: 20 },
-      {
-        tokenStore: new MemoryTokenStore(null),
-        authClient: new FakeAuthClient(),
-        productClient: new FakeProductClient()
-      }
-    );
+  it('returns API Key auth required when request auth context is missing', async () => {
+    const result = await searchProductsForMcp({ query: 'iphone case', page: 1, page_size: 20 }, { productClient: new FakeProductClient() });
 
     expect(result.isError).toBe(true);
-    const firstContent = result.content?.[0];
-    expect(firstContent?.type).toBe('text');
-    expect(firstContent?.type === 'text' ? firstContent.text : '').toContain('未登录');
+    expect(JSON.stringify(result)).toContain('AUTH_REQUIRED: 缺少或无效的 TVCMall API Key');
   });
 
   it('returns summarized product search results without token values', async () => {
-    const result = await searchProductsForMcp(
-      { query: 'iphone case', page: 1, page_size: 2 },
-      {
-        tokenStore: new MemoryTokenStore(activeSession),
-        authClient: new FakeAuthClient(),
-        productClient: new FakeProductClient(),
-        now: () => new Date('2026-07-07T10:00:00.000Z')
-      }
-    );
+    const result = await searchProductsForMcp({ query: 'iphone case', page: 1, page_size: 2 }, { authContext, productClient: new FakeProductClient() });
 
     expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toMatchObject({
-      query: 'iphone case',
-      page: 1,
-      page_size: 2,
-      total: expect.any(Number),
-      items: expect.any(Array)
-    });
-    expect(JSON.stringify(result)).not.toContain('fake-access-token');
-    expect(JSON.stringify(result)).not.toContain('fake-refresh-token');
+    expect(result.structuredContent).toMatchObject({ query: 'iphone case', page: 1, page_size: 2, total: expect.any(Number), items: expect.any(Array) });
+    expect(JSON.stringify(result)).not.toContain('short-lived-token');
+  });
+
+  it('denies product access without products:read before calling the client', async () => {
+    const productClient = new FakeProductClient();
+    const searchProducts = vi.spyOn(productClient, 'searchProducts');
+    const result = await searchProductsForMcp({ query: 'iphone case', page: 1, page_size: 2 }, { authContext: { ...authContext, scopes: [] }, productClient });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('PERMISSION_DENIED');
+    expect(searchProducts).not.toHaveBeenCalled();
   });
 });

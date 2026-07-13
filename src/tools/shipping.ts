@@ -1,11 +1,9 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AuthClient } from '../auth/auth-client.js';
-import { getActiveSession } from '../auth/session-manager.js';
+import { toStoredAuthSession, type RequestAuthContext } from '../auth/request-auth-context.js';
 import { MCP_ERROR_MESSAGES } from '../errors/mcp-errors.js';
 import { FakeShippingClient } from '../shipping/fake-shipping-client.js';
 import type { ShippingClient } from '../shipping/shipping-client.js';
-import type { TokenStore } from '../storage/token-store.js';
 
 export const EstimateShippingInputSchema = z.object({
   sku: z.string().trim().min(1),
@@ -68,20 +66,15 @@ export const EstimateShippingOutputSchema = z.object({
 export type EstimateShippingInput = z.infer<typeof EstimateShippingInputSchema>;
 
 export interface ShippingToolDependencies {
-  tokenStore: TokenStore;
-  authClient?: AuthClient;
+  authContext?: RequestAuthContext;
   shippingClient?: ShippingClient;
-  now?: () => Date;
 }
 
 export async function estimateShippingForMcp(
   input: EstimateShippingInput,
   dependencies: ShippingToolDependencies
 ): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, {
-    authClient: dependencies.authClient,
-    now: dependencies.now
-  });
+  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
 
   if (!session) {
     return {
@@ -94,6 +87,7 @@ export async function estimateShippingForMcp(
       ]
     };
   }
+  if (!session.scopes.includes('shipping:estimate')) return permissionDeniedResult();
 
   const parsedInput = EstimateShippingInputSchema.parse(input);
   const shippingClient = dependencies.shippingClient ?? new FakeShippingClient();
@@ -108,6 +102,10 @@ export async function estimateShippingForMcp(
     ],
     structuredContent: { ...result }
   };
+}
+
+function permissionDeniedResult(): CallToolResult {
+  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }
 
 function formatShippingEstimate(result: z.infer<typeof EstimateShippingOutputSchema>): string {

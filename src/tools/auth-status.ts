@@ -1,29 +1,23 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AuthClient } from '../auth/auth-client.js';
-import { getActiveSession } from '../auth/session-manager.js';
-import type { TokenStore } from '../storage/token-store.js';
+import type { RequestAuthContext } from '../auth/request-auth-context.js';
 
 export const AuthStatusOutputSchema = z.object({
   logged_in: z.boolean(),
+  display_name: z.string().optional(),
   customer_email: z.string().email().optional(),
   scopes: z.array(z.string())
 });
 
 export type AuthStatus = z.infer<typeof AuthStatusOutputSchema>;
 
-export interface AuthStatusOptions {
-  authClient?: AuthClient;
-  now?: () => Date;
-}
-
-export async function getAuthStatus(
-  tokenStore: TokenStore,
-  options: AuthStatusOptions = {}
-): Promise<AuthStatus> {
-  const session = await getActiveSession(tokenStore, options);
-
-  if (!session) {
+export function getAuthStatus(authContext?: RequestAuthContext): AuthStatus;
+export function getAuthStatus(legacyTokenStore?: unknown, legacyOptions?: unknown): AuthStatus;
+export function getAuthStatus(
+  authContextOrLegacy?: RequestAuthContext | unknown,
+  _legacyOptions?: unknown
+): AuthStatus {
+  if (!isRequestAuthContext(authContextOrLegacy)) {
     return {
       logged_in: false,
       scopes: []
@@ -32,16 +26,18 @@ export async function getAuthStatus(
 
   return {
     logged_in: true,
-    customer_email: session.customer.email,
-    scopes: [...session.scopes]
+    display_name: authContextOrLegacy.displayName,
+    scopes: [...authContextOrLegacy.scopes]
   };
 }
 
-export async function createAuthStatusToolResult(
-  tokenStore: TokenStore,
-  options: AuthStatusOptions = {}
-): Promise<CallToolResult> {
-  const status = await getAuthStatus(tokenStore, options);
+export function createAuthStatusToolResult(authContext?: RequestAuthContext): CallToolResult;
+export function createAuthStatusToolResult(legacyTokenStore?: unknown, legacyOptions?: unknown): CallToolResult;
+export function createAuthStatusToolResult(
+  authContextOrLegacy?: RequestAuthContext | unknown,
+  _legacyOptions?: unknown
+): CallToolResult {
+  const status = getAuthStatus(isRequestAuthContext(authContextOrLegacy) ? authContextOrLegacy : undefined);
 
   return {
     content: [
@@ -52,4 +48,15 @@ export async function createAuthStatusToolResult(
     ],
     structuredContent: status
   };
+}
+
+function isRequestAuthContext(value: unknown): value is RequestAuthContext {
+  return typeof value === 'object'
+    && value !== null
+    && 'customerId' in value
+    && 'displayName' in value
+    && 'upstreamAccessToken' in value
+    && 'expiresAt' in value
+    && 'apiKeyFingerprint' in value
+    && Array.isArray((value as RequestAuthContext).scopes);
 }

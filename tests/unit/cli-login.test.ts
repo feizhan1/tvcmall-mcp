@@ -80,7 +80,7 @@ describe('login command with fake data', () => {
     expect(stdout.value).not.toContain(tokenStore.session?.refreshToken ?? 'missing-refresh-token');
   });
 
-  it('lets whoami read the fake session saved by login', async () => {
+  it('does not let whoami use the fake local session after request-scoped auth migration', async () => {
     const tokenStore = new MemoryTokenStore();
     const stdout = new StringOutput();
 
@@ -88,8 +88,7 @@ describe('login command with fake data', () => {
     stdout.value = '';
     await runCli(['whoami'], { tokenStore, stdout, env: { ...testEnv, TVCMALL_DATA_SOURCE: 'fake' } });
 
-    expect(stdout.value).toContain('fake.customer@example.com');
-    expect(stdout.value).toContain('products:read');
+    expect(stdout.value).toContain('当前未登录 TVCMall');
     expect(stdout.value).not.toMatch(/fake-access-token/i);
     expect(stdout.value).not.toMatch(/fake-refresh-token/i);
   });

@@ -1,7 +1,7 @@
 export const MCP_ERROR_MESSAGES = {
-  AUTH_REQUIRED: '未登录，请先运行 npx @tvcmall/mcp login',
+  AUTH_REQUIRED: 'AUTH_REQUIRED: 缺少或无效的 TVCMall API Key',
   TOKEN_EXPIRED: 'token 已过期，自动 refresh 失败',
-  PERMISSION_DENIED: '当前账号没有该权限',
+  PERMISSION_DENIED: 'PERMISSION_DENIED: 当前 API Key 没有该权限',
   RATE_LIMITED: '请求过快，请稍后再试',
   VALIDATION_ERROR: '参数格式错误',
   API_UNAVAILABLE: 'TVCMall 服务暂不可用',

@@ -34,7 +34,7 @@ describe('MCP stdio harness', () => {
       arguments: { query: 'iphone case', page: 1, page_size: 2 }
     });
 
-    expect(JSON.stringify(searchResponse.result)).toContain('未登录');
+    expect(JSON.stringify(searchResponse.result)).toContain('AUTH_REQUIRED: 缺少或无效的 TVCMall API Key');
     expect(await harness.stderr()).toBe('');
   });
 });

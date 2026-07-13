@@ -1,51 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { getAuthStatus } from '../../src/tools/auth-status.js';
-import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
-
-class FakeTokenStore implements TokenStore {
-  constructor(private readonly session: StoredAuthSession | null) {}
-
-  async getSession(): Promise<StoredAuthSession | null> {
-    return this.session;
-  }
-
-  async saveSession(): Promise<void> {}
-
-  async clearSession(): Promise<void> {}
-}
 
 describe('getAuthStatus', () => {
-  it('returns logged_out status when no token session exists', async () => {
-    const status = await getAuthStatus(new FakeTokenStore(null));
-
-    expect(status).toEqual({
-      logged_in: false,
-      scopes: []
-    });
+  it('returns disconnected status when request auth context is missing', () => {
+    expect(getAuthStatus()).toEqual({ logged_in: false, scopes: [] });
   });
 
-  it('returns customer identity and scopes without exposing tokens', async () => {
-    const status = await getAuthStatus(
-      new FakeTokenStore({
-        customer: {
-          id: 'cus_123',
-          email: 'buyer@example.com',
-          name: 'Buyer'
-        },
-        scopes: ['products:read', 'orders:read'],
-        accessToken: 'access-secret-token',
-        refreshToken: 'refresh-secret-token',
-        tokenType: 'Bearer',
-        expiresAt: '2026-07-07T12:00:00.000Z'
-      })
-    );
+  it('returns display name and scopes without exposing the short-lived token or expiry', () => {
+    const status = getAuthStatus({
+      customerId: 'cus_123',
+      displayName: 'Buyer',
+      scopes: ['products:read', 'orders:read'],
+      upstreamAccessToken: 'access-secret-token',
+      expiresAt: '2030-01-01T00:00:00.000Z',
+      apiKeyFingerprint: 'fingerprint'
+    });
 
     expect(status).toEqual({
       logged_in: true,
-      customer_email: 'buyer@example.com',
+      display_name: 'Buyer',
       scopes: ['products:read', 'orders:read']
     });
     expect(JSON.stringify(status)).not.toContain('access-secret-token');
-    expect(JSON.stringify(status)).not.toContain('refresh-secret-token');
+    expect(JSON.stringify(status)).not.toContain('2030-01-01T00:00:00.000Z');
   });
 });

@@ -1,11 +1,9 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AuthClient } from '../auth/auth-client.js';
-import { getActiveSession } from '../auth/session-manager.js';
+import { toStoredAuthSession, type RequestAuthContext } from '../auth/request-auth-context.js';
 import { MCP_ERROR_MESSAGES } from '../errors/mcp-errors.js';
 import { FakeOrderClient } from '../orders/fake-order-client.js';
 import type { OrderClient } from '../orders/order-client.js';
-import type { TokenStore } from '../storage/token-store.js';
 
 export const OrderStatusSchema = z.enum(['pending', 'processing', 'shipped', 'delivered', 'cancelled']);
 
@@ -63,15 +61,14 @@ export type ListOrdersInput = z.infer<typeof ListOrdersInputSchema>;
 export type GetOrderDetailInput = z.infer<typeof GetOrderDetailInputSchema>;
 
 export interface OrderToolDependencies {
-  tokenStore: TokenStore;
-  authClient?: AuthClient;
+  authContext?: RequestAuthContext;
   orderClient?: OrderClient;
-  now?: () => Date;
 }
 
 export async function listOrdersForMcp(input: ListOrdersInput, dependencies: OrderToolDependencies): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, { authClient: dependencies.authClient, now: dependencies.now });
+  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
+  if (!session.scopes.includes('orders:read')) return permissionDeniedResult();
 
   const parsedInput = ListOrdersInputSchema.parse(input);
   const orderClient = dependencies.orderClient ?? new FakeOrderClient();
@@ -84,8 +81,9 @@ export async function listOrdersForMcp(input: ListOrdersInput, dependencies: Ord
 }
 
 export async function getOrderDetailForMcp(input: GetOrderDetailInput, dependencies: OrderToolDependencies): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, { authClient: dependencies.authClient, now: dependencies.now });
+  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
+  if (!session.scopes.includes('orders:read')) return permissionDeniedResult();
 
   const parsedInput = GetOrderDetailInputSchema.parse(input);
   const orderClient = dependencies.orderClient ?? new FakeOrderClient();
@@ -103,6 +101,10 @@ export async function getOrderDetailForMcp(input: GetOrderDetailInput, dependenc
 
 function authRequiredResult(): CallToolResult {
   return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.AUTH_REQUIRED }] };
+}
+
+function permissionDeniedResult(): CallToolResult {
+  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }
 
 function formatOrderList(result: z.infer<typeof ListOrdersOutputSchema>): string {

@@ -1,11 +1,9 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AuthClient } from '../auth/auth-client.js';
-import { getActiveSession } from '../auth/session-manager.js';
+import { toStoredAuthSession, type RequestAuthContext } from '../auth/request-auth-context.js';
 import { MCP_ERROR_MESSAGES } from '../errors/mcp-errors.js';
 import { FakePointsClient } from '../points/fake-points-client.js';
 import type { PointsClient } from '../points/points-client.js';
-import type { TokenStore } from '../storage/token-store.js';
 
 export const GetPointsInputSchema = z.object({});
 
@@ -40,15 +38,14 @@ export type GetPointsInput = z.infer<typeof GetPointsInputSchema>;
 export type ListPointRecordsInput = z.infer<typeof ListPointRecordsInputSchema>;
 
 export interface PointsToolDependencies {
-  tokenStore: TokenStore;
-  authClient?: AuthClient;
+  authContext?: RequestAuthContext;
   pointsClient?: PointsClient;
-  now?: () => Date;
 }
 
 export async function getPointsForMcp(_input: GetPointsInput, dependencies: PointsToolDependencies): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, { authClient: dependencies.authClient, now: dependencies.now });
+  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
+  if (!session.scopes.includes('points:read')) return permissionDeniedResult();
 
   const pointsClient = dependencies.pointsClient ?? new FakePointsClient();
   const result = await pointsClient.getPoints(session);
@@ -60,8 +57,9 @@ export async function getPointsForMcp(_input: GetPointsInput, dependencies: Poin
 }
 
 export async function listPointRecordsForMcp(input: ListPointRecordsInput, dependencies: PointsToolDependencies): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, { authClient: dependencies.authClient, now: dependencies.now });
+  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
+  if (!session.scopes.includes('points:read')) return permissionDeniedResult();
 
   const parsedInput = ListPointRecordsInputSchema.parse(input);
   const pointsClient = dependencies.pointsClient ?? new FakePointsClient();
@@ -75,4 +73,8 @@ export async function listPointRecordsForMcp(input: ListPointRecordsInput, depen
 
 function authRequiredResult(): CallToolResult {
   return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.AUTH_REQUIRED }] };
+}
+
+function permissionDeniedResult(): CallToolResult {
+  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }

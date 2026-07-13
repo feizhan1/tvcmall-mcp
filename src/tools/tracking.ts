@@ -1,11 +1,9 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AuthClient } from '../auth/auth-client.js';
-import { getActiveSession } from '../auth/session-manager.js';
+import { toStoredAuthSession, type RequestAuthContext } from '../auth/request-auth-context.js';
 import { MCP_ERROR_MESSAGES } from '../errors/mcp-errors.js';
 import { FakeTrackingClient } from '../tracking/fake-tracking-client.js';
 import type { TrackingClient } from '../tracking/tracking-client.js';
-import type { TokenStore } from '../storage/token-store.js';
 
 export const GetTrackingInfoInputSchema = z.object({
   order_id: z.string().trim().min(1)
@@ -45,15 +43,14 @@ export type GetTrackingInfoInput = z.infer<typeof GetTrackingInfoInputSchema>;
 export type BatchGetTrackingInput = z.infer<typeof BatchGetTrackingInputSchema>;
 
 export interface TrackingToolDependencies {
-  tokenStore: TokenStore;
-  authClient?: AuthClient;
+  authContext?: RequestAuthContext;
   trackingClient?: TrackingClient;
-  now?: () => Date;
 }
 
 export async function getTrackingInfoForMcp(input: GetTrackingInfoInput, dependencies: TrackingToolDependencies): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, { authClient: dependencies.authClient, now: dependencies.now });
+  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
+  if (!session.scopes.includes('tracking:read')) return permissionDeniedResult();
 
   const parsedInput = GetTrackingInfoInputSchema.parse(input);
   const trackingClient = dependencies.trackingClient ?? new FakeTrackingClient();
@@ -70,8 +67,9 @@ export async function getTrackingInfoForMcp(input: GetTrackingInfoInput, depende
 }
 
 export async function batchGetTrackingForMcp(input: BatchGetTrackingInput, dependencies: TrackingToolDependencies): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, { authClient: dependencies.authClient, now: dependencies.now });
+  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
+  if (!session.scopes.includes('tracking:read')) return permissionDeniedResult();
 
   const parsedInput = BatchGetTrackingInputSchema.parse(input);
   const trackingClient = dependencies.trackingClient ?? new FakeTrackingClient();
@@ -85,6 +83,10 @@ export async function batchGetTrackingForMcp(input: BatchGetTrackingInput, depen
 
 function authRequiredResult(): CallToolResult {
   return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.AUTH_REQUIRED }] };
+}
+
+function permissionDeniedResult(): CallToolResult {
+  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }
 
 function formatTrackingSummary(tracking: z.infer<typeof TrackingInfoSchema>): string {

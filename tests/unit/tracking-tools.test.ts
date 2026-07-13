@@ -1,36 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TrackingInfoOutputSchema, batchGetTrackingForMcp, getTrackingInfoForMcp } from '../../src/tools/tracking.js';
-import { FakeAuthClient } from '../../src/auth/fake-auth-client.js';
 import { FakeTrackingClient } from '../../src/tracking/fake-tracking-client.js';
 import type { BatchTrackingResult, TrackingClient, TrackingInfo } from '../../src/tracking/tracking-client.js';
-import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
 
-class MemoryTokenStore implements TokenStore {
-  constructor(public session: StoredAuthSession | null) {}
-
-  async getSession(): Promise<StoredAuthSession | null> { return this.session; }
-  async saveSession(session: StoredAuthSession): Promise<void> { this.session = session; }
-  async clearSession(): Promise<void> { this.session = null; }
-}
+const authContext = {
+  customerId: 'customer_123', displayName: 'TVCMall Buyer', scopes: ['tracking:read'],
+  upstreamAccessToken: 'short-lived-token', expiresAt: '2030-01-01T00:00:00.000Z', apiKeyFingerprint: 'fingerprint'
+};
 
 class ShippingTrackingClient implements TrackingClient {
   async getTrackingInfo(orderId: string): Promise<TrackingInfo | null> {
     return {
-      order_id: orderId,
-      carrier: 'dhl',
-      tracking_number: 'YT2430621266059602',
-      status: 'delivered',
-      shipping: {
-        carrier: 'dhl',
-        service: 'Logistics Tracking',
-        estimated_cost: 18.6,
-        currency: 'USD',
-        estimated_days: '7-12 days',
-        chargeable_weight_kg: 1.2
-      },
-      events: [
-        { time: '2024-11-17 17:31:07', location: '', status: 'Delivered' }
-      ]
+      order_id: orderId, carrier: 'dhl', tracking_number: 'YT2430621266059602', status: 'delivered',
+      shipping: { carrier: 'dhl', service: 'Logistics Tracking', estimated_cost: 18.6, currency: 'USD', estimated_days: '7-12 days', chargeable_weight_kg: 1.2 },
+      events: [{ time: '2024-11-17 17:31:07', location: '', status: 'Delivered' }]
     } as TrackingInfo;
   }
 
@@ -40,103 +23,36 @@ class ShippingTrackingClient implements TrackingClient {
   }
 }
 
-const activeSession: StoredAuthSession = {
-  customer: { id: 'fake_cus_001', email: 'fake.customer@example.com' },
-  scopes: ['tracking:read'],
-  accessToken: 'fake-access-token',
-  refreshToken: 'fake-refresh-token',
-  tokenType: 'Bearer',
-  expiresAt: '2026-07-07T12:00:00.000Z'
-};
-
 describe('tracking MCP tools', () => {
-  it('getTrackingInfoForMcp returns AUTH_REQUIRED when no session exists', async () => {
-    const result = await getTrackingInfoForMcp(
-      { order_id: 'V10001' },
-      { tokenStore: new MemoryTokenStore(null), authClient: new FakeAuthClient(), trackingClient: new FakeTrackingClient() }
-    );
-
+  it('returns API Key auth required when request auth context is missing', async () => {
+    const result = await getTrackingInfoForMcp({ order_id: 'V10001' }, { trackingClient: new FakeTrackingClient() });
     expect(result.isError).toBe(true);
-    expect(JSON.stringify(result)).toContain('未登录');
+    expect(JSON.stringify(result)).toContain('AUTH_REQUIRED');
   });
 
-  it('getTrackingInfoForMcp returns fake tracking info without token values', async () => {
-    const result = await getTrackingInfoForMcp(
-      { order_id: 'V10001' },
-      { tokenStore: new MemoryTokenStore(activeSession), authClient: new FakeAuthClient(), trackingClient: new FakeTrackingClient() }
-    );
+  it('returns tracking and shipping information without short-lived token values', async () => {
+    const tracking = await getTrackingInfoForMcp({ order_id: 'V24011000008' }, { authContext, trackingClient: new ShippingTrackingClient() });
+    const batch = await batchGetTrackingForMcp({ order_ids: ['V10001', 'V10002'] }, { authContext, trackingClient: new FakeTrackingClient() });
 
-    expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toMatchObject({
-      order_id: 'V10001',
-      carrier: expect.any(String),
-      tracking_number: expect.any(String),
-      events: expect.any(Array)
-    });
-    expect(JSON.stringify(result)).not.toContain('fake-access-token');
+    expect(tracking.content?.[0]).toMatchObject({ type: 'text', text: expect.stringContaining('运费：USD 18.60') });
+    expect(tracking.structuredContent).toMatchObject({ order_id: 'V24011000008', shipping: expect.objectContaining({ estimated_cost: 18.6 }) });
+    expect(batch.structuredContent).toMatchObject({ count: 2, items: expect.any(Array) });
+    expect(JSON.stringify([tracking, batch])).not.toContain('short-lived-token');
   });
 
-  it('getTrackingInfoForMcp exposes order shipping fee through the tracking tool summary and structured content', async () => {
-    const result = await getTrackingInfoForMcp(
-      { order_id: 'V24011000008' },
-      { tokenStore: new MemoryTokenStore(activeSession), authClient: new FakeAuthClient(), trackingClient: new ShippingTrackingClient() }
-    );
-
-    expect(result.isError).toBeUndefined();
-    expect(result.content?.[0]).toMatchObject({ type: 'text', text: expect.stringContaining('运费：USD 18.60') });
-    expect(result.structuredContent).toMatchObject({
-      order_id: 'V24011000008',
-      shipping: {
-        carrier: 'dhl',
-        service: 'Logistics Tracking',
-        estimated_cost: 18.6,
-        currency: 'USD',
-        estimated_days: '7-12 days',
-        chargeable_weight_kg: 1.2
-      }
-    });
+  it('does not call tracking client when tracking:read is absent', async () => {
+    const trackingClient = new FakeTrackingClient();
+    const getTrackingInfo = vi.spyOn(trackingClient, 'getTrackingInfo');
+    const result = await getTrackingInfoForMcp({ order_id: 'V10001' }, { authContext: { ...authContext, scopes: [] }, trackingClient });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('PERMISSION_DENIED');
+    expect(getTrackingInfo).not.toHaveBeenCalled();
   });
 
-  it('TrackingInfoOutputSchema preserves optional shipping fee details', () => {
-    const parsed = TrackingInfoOutputSchema.parse({
-      order_id: 'V24011000008',
-      carrier: 'dhl',
-      tracking_number: 'YT2430621266059602',
-      status: 'delivered',
-      shipping: {
-        carrier: 'dhl',
-        service: 'Logistics Tracking',
-        estimated_cost: 18.6,
-        currency: 'USD',
-        estimated_days: '7-12 days',
-        chargeable_weight_kg: 1.2
-      },
-      events: []
-    });
-
-    expect(parsed.shipping).toEqual({
-      carrier: 'dhl',
-      service: 'Logistics Tracking',
-      estimated_cost: 18.6,
-      currency: 'USD',
-      estimated_days: '7-12 days',
-      chargeable_weight_kg: 1.2
-    });
-  });
-
-  it('batchGetTrackingForMcp returns multiple tracking records', async () => {
-    const result = await batchGetTrackingForMcp(
-      { order_ids: ['V10001', 'V10002'] },
-      { tokenStore: new MemoryTokenStore(activeSession), authClient: new FakeAuthClient(), trackingClient: new FakeTrackingClient() }
-    );
-
-    expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toMatchObject({
-      count: 2,
-      items: expect.arrayContaining([
-        expect.objectContaining({ order_id: 'V10001' }),
-        expect.objectContaining({ order_id: 'V10002' })
-      ])
-    });
+  it('preserves optional shipping fee details', () => {
+    expect(TrackingInfoOutputSchema.parse({
+      order_id: 'V24011000008', carrier: 'dhl', tracking_number: 'YT2430621266059602', status: 'delivered',
+      shipping: { carrier: 'dhl', service: 'Logistics Tracking', estimated_cost: 18.6, currency: 'USD', estimated_days: '7-12 days', chargeable_weight_kg: 1.2 }, events: []
+    }).shipping).toEqual({ carrier: 'dhl', service: 'Logistics Tracking', estimated_cost: 18.6, currency: 'USD', estimated_days: '7-12 days', chargeable_weight_kg: 1.2 });
   });
 });

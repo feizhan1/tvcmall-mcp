@@ -1,13 +1,11 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AuthClient } from '../auth/auth-client.js';
-import { getActiveSession } from '../auth/session-manager.js';
+import { toStoredAuthSession, type RequestAuthContext } from '../auth/request-auth-context.js';
 import { exportOrdersToCsv } from '../export/csv-exporter.js';
 import { MCP_ERROR_MESSAGES } from '../errors/mcp-errors.js';
 import { FakeOrderClient } from '../orders/fake-order-client.js';
 import type { OrderClient } from '../orders/order-client.js';
 import { OrderStatusSchema } from './orders.js';
-import type { TokenStore } from '../storage/token-store.js';
 
 export const ExportOrdersInputSchema = z.object({
   start_date: z.string(),
@@ -29,8 +27,7 @@ export const ExportOrdersOutputSchema = z.object({
 export type ExportOrdersInput = z.infer<typeof ExportOrdersInputSchema>;
 
 export interface ExportOrdersDependencies {
-  tokenStore: TokenStore;
-  authClient?: AuthClient;
+  authContext?: RequestAuthContext;
   orderClient?: OrderClient;
   exportDir?: string;
   now?: () => Date;
@@ -40,14 +37,12 @@ export async function exportOrdersForMcp(
   input: ExportOrdersInput,
   dependencies: ExportOrdersDependencies
 ): Promise<CallToolResult> {
-  const session = await getActiveSession(dependencies.tokenStore, {
-    authClient: dependencies.authClient,
-    now: dependencies.now
-  });
+  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
 
   if (!session) {
     return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.AUTH_REQUIRED }] };
   }
+  if (!session.scopes.includes('orders:export')) return permissionDeniedResult();
 
   const parsedInput = ExportOrdersInputSchema.parse(input);
 
@@ -92,4 +87,8 @@ export async function exportOrdersForMcp(
     ],
     structuredContent: structured
   };
+}
+
+function permissionDeniedResult(): CallToolResult {
+  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }

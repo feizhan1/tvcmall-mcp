@@ -1,11 +1,9 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AuthClient } from '../auth/auth-client.js';
-import { getActiveSession } from '../auth/session-manager.js';
+import { toStoredAuthSession, type RequestAuthContext } from '../auth/request-auth-context.js';
 import { MCP_ERROR_MESSAGES } from '../errors/mcp-errors.js';
 import type { ProductClient } from '../products/product-client.js';
 import { FakeProductClient } from '../products/fake-product-client.js';
-import type { TokenStore } from '../storage/token-store.js';
 
 export const SearchProductsInputSchema = z.object({
   query: z.string().trim().min(1),
@@ -57,10 +55,8 @@ export type SearchProductsInput = z.infer<typeof SearchProductsInputSchema>;
 export type GetProductDetailInput = z.infer<typeof GetProductDetailInputSchema>;
 
 export interface ProductToolDependencies {
-  tokenStore: TokenStore;
-  authClient?: AuthClient;
+  authContext?: RequestAuthContext;
   productClient?: ProductClient;
-  now?: () => Date;
 }
 
 export async function searchProductsForMcp(
@@ -72,6 +68,7 @@ export async function searchProductsForMcp(
   if (!session) {
     return authRequiredResult();
   }
+  if (!session.scopes.includes('products:read')) return permissionDeniedResult();
 
   const parsedInput = SearchProductsInputSchema.parse(input);
   const productClient = dependencies.productClient ?? new FakeProductClient();
@@ -97,6 +94,7 @@ export async function getProductDetailForMcp(
   if (!session) {
     return authRequiredResult();
   }
+  if (!session.scopes.includes('products:read')) return permissionDeniedResult();
 
   const parsedInput = GetProductDetailInputSchema.parse(input);
   const productClient = dependencies.productClient ?? new FakeProductClient();
@@ -125,11 +123,8 @@ export async function getProductDetailForMcp(
   };
 }
 
-async function getToolSession(dependencies: ProductToolDependencies) {
-  return getActiveSession(dependencies.tokenStore, {
-    authClient: dependencies.authClient,
-    now: dependencies.now
-  });
+function getToolSession(dependencies: ProductToolDependencies) {
+  return dependencies.authContext && toStoredAuthSession(dependencies.authContext);
 }
 
 function authRequiredResult(): CallToolResult {
@@ -142,6 +137,10 @@ function authRequiredResult(): CallToolResult {
       }
     ]
   };
+}
+
+function permissionDeniedResult(): CallToolResult {
+  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }
 
 function formatProductSearchSummary(result: z.infer<typeof SearchProductsOutputSchema>): string {

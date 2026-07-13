@@ -1,80 +1,37 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { EstimateShippingInputSchema, estimateShippingForMcp } from '../../src/tools/shipping.js';
-import { FakeAuthClient } from '../../src/auth/fake-auth-client.js';
 import { FakeShippingClient } from '../../src/shipping/fake-shipping-client.js';
-import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
 
-class MemoryTokenStore implements TokenStore {
-  constructor(public session: StoredAuthSession | null) {}
-
-  async getSession(): Promise<StoredAuthSession | null> {
-    return this.session;
-  }
-
-  async saveSession(session: StoredAuthSession): Promise<void> {
-    this.session = session;
-  }
-
-  async clearSession(): Promise<void> {
-    this.session = null;
-  }
-}
-
-const activeSession: StoredAuthSession = {
-  customer: { id: 'fake_cus_001', email: 'fake.customer@example.com' },
-  scopes: ['shipping:estimate'],
-  accessToken: 'fake-access-token',
-  refreshToken: 'fake-refresh-token',
-  tokenType: 'Bearer',
-  expiresAt: '2026-07-07T12:00:00.000Z'
+const authContext = {
+  customerId: 'customer_123', displayName: 'TVCMall Buyer', scopes: ['shipping:estimate'],
+  upstreamAccessToken: 'short-lived-token', expiresAt: '2030-01-01T00:00:00.000Z', apiKeyFingerprint: 'fingerprint'
 };
+const input = { sku: 'TVC-IP15-CASE-CLEAR', quantity: 10, countrycode: 'US' };
 
 describe('estimateShippingForMcp', () => {
-  it('returns AUTH_REQUIRED when no session exists', async () => {
-    const result = await estimateShippingForMcp(
-      { sku: 'TVC-IP15-CASE-CLEAR', quantity: 10, countrycode: 'US' },
-      { tokenStore: new MemoryTokenStore(null), authClient: new FakeAuthClient(), shippingClient: new FakeShippingClient() }
-    );
-
+  it('returns API Key auth required when request auth context is missing', async () => {
+    const result = await estimateShippingForMcp(input, { shippingClient: new FakeShippingClient() });
     expect(result.isError).toBe(true);
-    expect(JSON.stringify(result)).toContain('未登录');
+    expect(JSON.stringify(result)).toContain('AUTH_REQUIRED');
   });
 
-  it('returns fake shipping options without token values', async () => {
-    const result = await estimateShippingForMcp(
-      { sku: 'TVC-IP15-CASE-CLEAR', quantity: 10, countrycode: 'US' },
-      {
-        tokenStore: new MemoryTokenStore(activeSession),
-        authClient: new FakeAuthClient(),
-        shippingClient: new FakeShippingClient(),
-        now: () => new Date('2026-07-07T10:00:00.000Z')
-      }
-    );
-
-    expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toMatchObject({
-      destination_country: 'US',
-      currency: 'USD',
-      chargeable_weight_kg: expect.any(Number),
-      options: expect.arrayContaining([
-        expect.objectContaining({ carrier: expect.any(String), estimated_cost: expect.any(Number) })
-      ])
-    });
-    expect(JSON.stringify(result)).not.toContain('fake-access-token');
-    expect(JSON.stringify(result)).not.toContain('fake-refresh-token');
+  it('returns shipping options without short-lived token values', async () => {
+    const result = await estimateShippingForMcp(input, { authContext, shippingClient: new FakeShippingClient() });
+    expect(result.structuredContent).toMatchObject({ destination_country: 'US', currency: 'USD', options: expect.any(Array) });
+    expect(JSON.stringify(result)).not.toContain('short-lived-token');
   });
 
-  it('accepts OpenAPI aligned product shipping input and rejects order_id only input', () => {
-    expect(EstimateShippingInputSchema.parse({
-      sku: '684000085E',
-      quantity: 1,
-      countrycode: 'AO'
-    })).toEqual({
-      sku: '684000085E',
-      quantity: 1,
-      countrycode: 'AO'
-    });
+  it('does not call shipping client when shipping:estimate is absent', async () => {
+    const shippingClient = new FakeShippingClient();
+    const estimateShipping = vi.spyOn(shippingClient, 'estimateShipping');
+    const result = await estimateShippingForMcp(input, { authContext: { ...authContext, scopes: [] }, shippingClient });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('PERMISSION_DENIED');
+    expect(estimateShipping).not.toHaveBeenCalled();
+  });
 
+  it('accepts product shipping input and rejects order_id only input', () => {
+    expect(EstimateShippingInputSchema.parse({ sku: '684000085E', quantity: 1, countrycode: 'AO' })).toEqual({ sku: '684000085E', quantity: 1, countrycode: 'AO' });
     expect(() => EstimateShippingInputSchema.parse({ order_id: 'V24011000008' })).toThrow('sku');
   });
 });
