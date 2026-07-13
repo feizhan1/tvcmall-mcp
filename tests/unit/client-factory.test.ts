@@ -20,7 +20,13 @@ describe('createTvcMallClients', () => {
       apiTimeoutMs: 15000,
       apiEnv: 'production',
       logLevel: 'info',
-      dataSource: 'fake'
+      dataSource: 'fake',
+      mcpHost: '127.0.0.1',
+      mcpPort: 3000,
+      mcpPath: '/mcp',
+      apiKeyVerifyUrl: 'https://auth.tvcmall.test/api/mcp/auth/verify',
+      apiKeyVerifyTimeoutMs: 5000,
+      exportTtlMs: 3600000
     });
 
     expect(clients.authClient).toBeInstanceOf(FakeAuthClient);
@@ -37,7 +43,13 @@ describe('createTvcMallClients', () => {
       apiTimeoutMs: 15000,
       apiEnv: 'production',
       logLevel: 'info',
-      dataSource: 'real'
+      dataSource: 'real',
+      mcpHost: '127.0.0.1',
+      mcpPort: 3000,
+      mcpPath: '/mcp',
+      apiKeyVerifyUrl: 'https://auth.tvcmall.test/api/mcp/auth/verify',
+      apiKeyVerifyTimeoutMs: 5000,
+      exportTtlMs: 3600000
     });
 
     expect(clients.authClient).toBeInstanceOf(HttpAuthClient);

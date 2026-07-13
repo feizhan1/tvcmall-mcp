@@ -32,7 +32,7 @@ export abstract class BaseHttpClient {
     return {
       Accept: 'application/json',
       ...(json ? { 'Content-Type': 'application/json' } : {}),
-      Authorization: session.accessToken
+      Authorization: `Bearer ${session.accessToken}`
     };
   }
 

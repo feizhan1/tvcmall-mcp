@@ -12,7 +12,13 @@ export interface TvcMallRuntimeConfig {
   apiEnv: TvcMallApiEnv;
   logLevel: TvcMallLogLevel;
   dataSource: TvcMallDataSource;
+  mcpHost: string;
+  mcpPort: number;
+  mcpPath: string;
+  apiKeyVerifyUrl: string;
+  apiKeyVerifyTimeoutMs: number;
   exportDir?: string;
+  exportTtlMs: number;
   apiAuthorization?: string;
 }
 
@@ -21,7 +27,13 @@ export const DEFAULT_RUNTIME_CONFIG: TvcMallRuntimeConfig = {
   apiTimeoutMs: 15000,
   apiEnv: 'production',
   logLevel: 'info',
-  dataSource: 'real'
+  dataSource: 'real',
+  mcpHost: '127.0.0.1',
+  mcpPort: 3000,
+  mcpPath: '/mcp',
+  apiKeyVerifyUrl: 'http://192.168.1.16:8084/api/mcp/auth/verify',
+  apiKeyVerifyTimeoutMs: 5000,
+  exportTtlMs: 3600000
 };
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMallRuntimeConfig {
@@ -31,7 +43,13 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMall
     apiEnv: readEnum(env.TVCMALL_API_ENV, API_ENV_VALUES) ?? DEFAULT_RUNTIME_CONFIG.apiEnv,
     logLevel: readEnum(env.TVCMALL_LOG_LEVEL, LOG_LEVEL_VALUES) ?? DEFAULT_RUNTIME_CONFIG.logLevel,
     dataSource: readEnum(env.TVCMALL_DATA_SOURCE, DATA_SOURCE_VALUES) ?? DEFAULT_RUNTIME_CONFIG.dataSource,
+    mcpHost: readString(env.TVCMALL_MCP_HOST) ?? DEFAULT_RUNTIME_CONFIG.mcpHost,
+    mcpPort: readPositiveInteger(env.TVCMALL_MCP_PORT) ?? DEFAULT_RUNTIME_CONFIG.mcpPort,
+    mcpPath: readMcpPath(env.TVCMALL_MCP_PATH) ?? DEFAULT_RUNTIME_CONFIG.mcpPath,
+    apiKeyVerifyUrl: readString(env.TVCMALL_API_KEY_VERIFY_URL) ?? DEFAULT_RUNTIME_CONFIG.apiKeyVerifyUrl,
+    apiKeyVerifyTimeoutMs: readPositiveInteger(env.TVCMALL_API_KEY_VERIFY_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiKeyVerifyTimeoutMs,
     ...readOptionalValue('exportDir', env.TVCMALL_EXPORT_DIR),
+    exportTtlMs: readPositiveInteger(env.TVCMALL_EXPORT_TTL_MS) ?? DEFAULT_RUNTIME_CONFIG.exportTtlMs,
     ...readOptionalValue('apiAuthorization', env.TVCMALL_API_AUTHORIZATION)
   };
 }
@@ -48,6 +66,12 @@ function readPositiveInteger(value: string | undefined): number | undefined {
   const parsed = Number(trimmed);
   if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
   return parsed;
+}
+
+function readMcpPath(value: string | undefined): string | undefined {
+  const path = readString(value);
+  if (!path?.startsWith('/') || path.includes('?') || path.includes('#')) return undefined;
+  return path.length > 1 ? path.replace(/\/+$/, '') : path;
 }
 
 function readEnum<T extends readonly string[]>(value: string | undefined, allowedValues: T): T[number] | undefined {

@@ -12,7 +12,13 @@ describe('runtime config', () => {
       TVCMALL_API_TIMEOUT_MS: '25000',
       TVCMALL_API_ENV: 'sandbox',
       TVCMALL_LOG_LEVEL: 'debug',
+      TVCMALL_MCP_HOST: ' 127.0.0.1 ',
+      TVCMALL_MCP_PORT: '3100',
+      TVCMALL_MCP_PATH: ' /customer-mcp ',
+      TVCMALL_API_KEY_VERIFY_URL: ' https://auth.tvcmall.test/api/mcp/auth/verify ',
+      TVCMALL_API_KEY_VERIFY_TIMEOUT_MS: '4000',
       TVCMALL_EXPORT_DIR: ' /tmp/tvcmall-exports ',
+      TVCMALL_EXPORT_TTL_MS: '7200000',
       TVCMALL_API_AUTHORIZATION: ' login-api-authorization-example ',
       TVCMALL_DATA_SOURCE: 'real'
     })).toEqual({
@@ -20,7 +26,13 @@ describe('runtime config', () => {
       apiTimeoutMs: 25000,
       apiEnv: 'sandbox',
       logLevel: 'debug',
+      mcpHost: '127.0.0.1',
+      mcpPort: 3100,
+      mcpPath: '/customer-mcp',
+      apiKeyVerifyUrl: 'https://auth.tvcmall.test/api/mcp/auth/verify',
+      apiKeyVerifyTimeoutMs: 4000,
       exportDir: '/tmp/tvcmall-exports',
+      exportTtlMs: 7200000,
       apiAuthorization: 'login-api-authorization-example',
       dataSource: 'real'
     });
