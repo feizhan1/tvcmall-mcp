@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { runCli } from '../../src/cli/app.js';
+import { createCli, runCli } from '../../src/cli/app.js';
 import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
 
-const testEnv = { TVCMALL_API_KEY_VERIFY_URL: 'https://auth.test/verify' };
+const testEnv = {
+  TVCMALL_API_KEY_VERIFY_URL: 'https://auth.test/verify',
+  TVCMALL_WEBAPI_BASE_URL: 'https://webapi.test'
+};
 
 class MemoryTokenStore implements TokenStore {
   public session: StoredAuthSession | null = null;
@@ -80,7 +83,7 @@ describe('login command with fake data', () => {
     expect(stdout.value).not.toContain(tokenStore.session?.refreshToken ?? 'missing-refresh-token');
   });
 
-  it('does not let whoami use the fake local session after request-scoped auth migration', async () => {
+  it('explains the remote PAT configuration boundary without exposing the fake local session', async () => {
     const tokenStore = new MemoryTokenStore();
     const stdout = new StringOutput();
 
@@ -88,9 +91,28 @@ describe('login command with fake data', () => {
     stdout.value = '';
     await runCli(['whoami'], { tokenStore, stdout, env: { ...testEnv, TVCMALL_DATA_SOURCE: 'fake' } });
 
-    expect(stdout.value).toContain('当前未登录 TVCMall');
-    expect(stdout.value).not.toMatch(/fake-access-token/i);
-    expect(stdout.value).not.toMatch(/fake-refresh-token/i);
+    expect(stdout.value).toContain('本地 CLI 无法读取或判断远程 MCP 会话的 PAT 配置状态');
+    expect(stdout.value).toContain('Authorization: Bearer tmcp_v1_{tokenId}.{secret}');
+    expect(stdout.value).not.toContain('当前未登录 TVCMall');
+    expect(stdout.value).not.toContain('已登录 TVCMall MCP');
+    expect(stdout.value).not.toContain('当前账号');
+    expect(stdout.value).not.toContain('权限范围');
+    expect(stdout.value).not.toContain('fake.customer@example.com');
+    expect(stdout.value).not.toContain('profile:read');
+    expect(stdout.value).not.toContain(tokenStore.session?.accessToken ?? 'missing-access-token');
+    expect(stdout.value).not.toContain(tokenStore.session?.refreshToken ?? 'missing-refresh-token');
+  });
+
+  it('describes whoami as remote MCP PAT guidance', () => {
+    const program = createCli({
+      tokenStore: new MemoryTokenStore(),
+      stdout: new StringOutput(),
+      env: { ...testEnv, TVCMALL_DATA_SOURCE: 'fake' }
+    });
+
+    const whoamiCommand = program.commands.find((command) => command.name() === 'whoami');
+
+    expect(whoamiCommand?.description()).toBe('查看远程 MCP PAT 配置说明');
   });
 
   it('passes explicit credentials to real auth login without printing secrets', async () => {

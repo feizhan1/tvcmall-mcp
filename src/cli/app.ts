@@ -51,7 +51,7 @@ export function createCli(options: CliOptions = {}): Command {
 
   program
     .command('whoami')
-    .description('展示当前登录账号和权限范围')
+    .description('查看远程 MCP PAT 配置说明')
     .action(async () => {
       stdout.write(`${formatWhoami(await getAuthStatus(tokenStore, { authClient }))}\n`);
     });
