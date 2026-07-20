@@ -7,7 +7,7 @@ export type TvcMallLogLevel = typeof LOG_LEVEL_VALUES[number];
 export type TvcMallDataSource = typeof DATA_SOURCE_VALUES[number];
 
 export interface TvcMallRuntimeConfig {
-  apiBaseUrl: string;
+  webApiBaseUrl: string;
   apiTimeoutMs: number;
   apiEnv: TvcMallApiEnv;
   logLevel: TvcMallLogLevel;
@@ -15,15 +15,12 @@ export interface TvcMallRuntimeConfig {
   mcpHost: string;
   mcpPort: number;
   mcpPath: string;
-  apiKeyVerifyUrl: string;
-  apiKeyVerifyTimeoutMs: number;
   exportDir?: string;
   exportTtlMs: number;
   apiAuthorization?: string;
 }
 
 export const DEFAULT_RUNTIME_CONFIG = {
-  apiBaseUrl: 'http://192.168.1.16:8084/api/m',
   apiTimeoutMs: 15000,
   apiEnv: 'production',
   logLevel: 'info',
@@ -31,14 +28,13 @@ export const DEFAULT_RUNTIME_CONFIG = {
   mcpHost: '127.0.0.1',
   mcpPort: 3000,
   mcpPath: '/mcp',
-  apiKeyVerifyTimeoutMs: 5000,
   exportTtlMs: 3600000
-} satisfies Omit<TvcMallRuntimeConfig, 'apiKeyVerifyUrl'>;
+} satisfies Omit<TvcMallRuntimeConfig, 'webApiBaseUrl'>;
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMallRuntimeConfig {
   const apiEnv = readEnum(env.TVCMALL_API_ENV, API_ENV_VALUES) ?? DEFAULT_RUNTIME_CONFIG.apiEnv;
   return {
-    apiBaseUrl: readString(env.TVCMALL_API_BASE_URL) ?? DEFAULT_RUNTIME_CONFIG.apiBaseUrl,
+    webApiBaseUrl: readWebApiBaseUrl(env.TVCMALL_WEBAPI_BASE_URL),
     apiTimeoutMs: readPositiveInteger(env.TVCMALL_API_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiTimeoutMs,
     apiEnv,
     logLevel: readEnum(env.TVCMALL_LOG_LEVEL, LOG_LEVEL_VALUES) ?? DEFAULT_RUNTIME_CONFIG.logLevel,
@@ -46,8 +42,6 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMall
     mcpHost: readString(env.TVCMALL_MCP_HOST) ?? DEFAULT_RUNTIME_CONFIG.mcpHost,
     mcpPort: readPositiveInteger(env.TVCMALL_MCP_PORT) ?? DEFAULT_RUNTIME_CONFIG.mcpPort,
     mcpPath: readMcpPath(env.TVCMALL_MCP_PATH) ?? DEFAULT_RUNTIME_CONFIG.mcpPath,
-    apiKeyVerifyUrl: readApiKeyVerifyUrl(env.TVCMALL_API_KEY_VERIFY_URL, apiEnv, env.TVCMALL_ALLOW_INSECURE_API_KEY_VERIFY_URL_FOR_DEVELOPMENT),
-    apiKeyVerifyTimeoutMs: readPositiveInteger(env.TVCMALL_API_KEY_VERIFY_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiKeyVerifyTimeoutMs,
     ...readOptionalValue('exportDir', env.TVCMALL_EXPORT_DIR),
     exportTtlMs: readPositiveInteger(env.TVCMALL_EXPORT_TTL_MS) ?? DEFAULT_RUNTIME_CONFIG.exportTtlMs,
     ...readOptionalValue('apiAuthorization', env.TVCMALL_API_AUTHORIZATION)
@@ -74,25 +68,19 @@ function readMcpPath(value: string | undefined): string | undefined {
   return path.length > 1 ? path.replace(/\/+$/, '') : path;
 }
 
-function readApiKeyVerifyUrl(value: string | undefined, apiEnv: TvcMallApiEnv, allowInsecureForDevelopment: string | undefined): string {
+function readWebApiBaseUrl(value: string | undefined): string {
   const url = readString(value);
-  if (!url) throw new Error('TVCMALL_API_KEY_VERIFY_URL must be explicitly configured as an HTTPS URL');
+  if (!url) throw new Error('TVCMALL_WEBAPI_BASE_URL must be explicitly configured as an HTTPS URL');
 
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error('TVCMALL_API_KEY_VERIFY_URL must be a valid HTTPS URL');
+    throw new Error('TVCMALL_WEBAPI_BASE_URL must be a valid HTTPS URL');
   }
 
   if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) return url;
-
-  const isExplicitDevelopmentHttp = parsed.protocol === 'http:'
-    && apiEnv !== 'production'
-    && allowInsecureForDevelopment?.trim().toLowerCase() === 'true';
-  if (isExplicitDevelopmentHttp) return url;
-
-  throw new Error('TVCMALL_API_KEY_VERIFY_URL must be an HTTPS URL outside explicitly enabled development use');
+  throw new Error('TVCMALL_WEBAPI_BASE_URL must be an HTTPS URL');
 }
 
 function readEnum<T extends readonly string[]>(value: string | undefined, allowedValues: T): T[number] | undefined {

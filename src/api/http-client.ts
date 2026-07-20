@@ -41,7 +41,7 @@ export abstract class BaseHttpClient {
   }
 
   protected authHeaders(session: StoredAuthSession, json = false): Record<string, string> {
-    if (!session.accessToken) {
+    if (!session.accessToken?.trim()) {
       throw new WebApiRequestError('AUTH_REQUIRED');
     }
 

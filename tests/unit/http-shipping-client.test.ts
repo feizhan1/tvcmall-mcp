@@ -7,7 +7,7 @@ import type { StoredAuthSession } from '../../src/storage/token-store.js';
 const session: StoredAuthSession = {
   customer: { id: 'cus_100', email: 'buyer@example.com' },
   scopes: ['shipping:estimate'],
-  accessToken: 'login-access-token',
+  accessToken: 'tmcp_v1_token-id.secret-value',
   tokenType: 'Bearer'
 };
 
@@ -26,7 +26,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpShippingClient', () => {
-  it('computes product destination shipping with sku body query and Bearer access token Authorization header', async () => {
+  it('computes product destination shipping through the existing WebApi route using the session PAT once as Bearer', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         countrycode: 'AO',
@@ -60,7 +60,7 @@ describe('HttpShippingClient', () => {
       countrycode: 'AO'
     });
     expect(init.method).toBe('GET');
-    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer tmcp_v1_token-id.secret-value' });
     expect(result).toEqual({
       destination_country: 'AO',
       currency: 'USD',

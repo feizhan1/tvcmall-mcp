@@ -16,7 +16,7 @@ import { HttpProductClient } from '../../src/products/http-product-client.js';
 describe('createTvcMallClients', () => {
   it('uses fake clients by default', () => {
     const clients = createTvcMallClients({
-      apiBaseUrl: 'https://api.tvcmall.test',
+      webApiBaseUrl: 'https://webapi.tvcmall.test',
       apiTimeoutMs: 15000,
       apiEnv: 'production',
       logLevel: 'info',
@@ -24,8 +24,6 @@ describe('createTvcMallClients', () => {
       mcpHost: '127.0.0.1',
       mcpPort: 3000,
       mcpPath: '/mcp',
-      apiKeyVerifyUrl: 'https://auth.tvcmall.test/api/mcp/auth/verify',
-      apiKeyVerifyTimeoutMs: 5000,
       exportTtlMs: 3600000
     });
 
@@ -39,7 +37,7 @@ describe('createTvcMallClients', () => {
 
   it('uses HTTP clients when TVCMall data source is real', () => {
     const clients = createTvcMallClients({
-      apiBaseUrl: 'https://api.tvcmall.test',
+      webApiBaseUrl: 'https://webapi.tvcmall.test',
       apiTimeoutMs: 15000,
       apiEnv: 'production',
       logLevel: 'info',
@@ -47,8 +45,6 @@ describe('createTvcMallClients', () => {
       mcpHost: '127.0.0.1',
       mcpPort: 3000,
       mcpPath: '/mcp',
-      apiKeyVerifyUrl: 'https://auth.tvcmall.test/api/mcp/auth/verify',
-      apiKeyVerifyTimeoutMs: 5000,
       exportTtlMs: 3600000
     });
 
@@ -58,5 +54,8 @@ describe('createTvcMallClients', () => {
     expect(clients.pointsClient).toBeInstanceOf(HttpPointsClient);
     expect(clients.shippingClient).toBeInstanceOf(HttpShippingClient);
     expect(clients.trackingClient).toBeInstanceOf(HttpTrackingClient);
+    for (const client of Object.values(clients)) {
+      expect((client as unknown as { baseUrl: string }).baseUrl).toBe('https://webapi.tvcmall.test');
+    }
   });
 });

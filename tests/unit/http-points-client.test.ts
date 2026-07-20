@@ -6,7 +6,7 @@ import type { StoredAuthSession } from '../../src/storage/token-store.js';
 const session: StoredAuthSession = {
   customer: { id: 'cus_100', email: 'buyer@example.com' },
   scopes: ['points:read'],
-  accessToken: 'login-access-token',
+  accessToken: 'tmcp_v1_token-id.secret-value',
   tokenType: 'Bearer'
 };
 
@@ -25,7 +25,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpPointsClient', () => {
-  it('gets customer points through the documented endpoint using a Bearer access token Authorization header', async () => {
+  it('gets customer points through the existing WebApi route using the session PAT once as Bearer', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         availablePoints: 120,
@@ -40,7 +40,7 @@ describe('HttpPointsClient', () => {
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://api.tvcmall.test/v3/user/points/stat');
-    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer tmcp_v1_token-id.secret-value' });
     expect(result).toEqual({
       available_points: 120,
       pending_points: 5,
@@ -49,7 +49,7 @@ describe('HttpPointsClient', () => {
     });
   });
 
-  it('lists points records through the documented endpoint using a Bearer access token Authorization header', async () => {
+  it('lists points records through the existing WebApi route using the same session PAT', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         total: 1,
@@ -67,7 +67,7 @@ describe('HttpPointsClient', () => {
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/v3/user/points/list');
     expect(parsedUrl.searchParams.get('pageindex')).toBe('3');
     expect(parsedUrl.searchParams.get('pagesize')).toBe('10');
-    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer tmcp_v1_token-id.secret-value' });
     expect(result).toEqual({
       page: 3,
       page_size: 10,

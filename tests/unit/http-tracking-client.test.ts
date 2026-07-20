@@ -6,7 +6,7 @@ import type { StoredAuthSession } from '../../src/storage/token-store.js';
 const session: StoredAuthSession = {
   customer: { id: 'cus_100', email: 'buyer@example.com' },
   scopes: ['tracking:read'],
-  accessToken: 'login-access-token',
+  accessToken: 'tmcp_v1_token-id.secret-value',
   tokenType: 'Bearer'
 };
 
@@ -25,7 +25,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpTrackingClient', () => {
-  it('gets order logistics tracking with a Bearer access token Authorization header', async () => {
+  it('gets order logistics tracking through the existing WebApi route using the session PAT once as Bearer', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         orderId: 'V26030900012',
@@ -48,7 +48,7 @@ describe('HttpTrackingClient', () => {
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/order/getlogisticstracking');
     expect(parsedUrl.searchParams.get('orderId')).toBe('V26030900012');
     expect(init.method).toBe('GET');
-    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer tmcp_v1_token-id.secret-value' });
     expect(result).toEqual({
       order_id: 'V26030900012',
       carrier: 'DHL',

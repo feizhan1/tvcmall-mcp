@@ -6,7 +6,7 @@ import type { StoredAuthSession } from '../../src/storage/token-store.js';
 const session: StoredAuthSession = {
   customer: { id: 'cus_100', email: 'buyer@example.com' },
   scopes: ['products:read'],
-  accessToken: 'login-access-token',
+  accessToken: 'tmcp_v1_token-id.secret-value',
   tokenType: 'Bearer'
 };
 
@@ -25,7 +25,7 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpProductClient', () => {
-  it('searches products through the documented endpoint using a Bearer access token Authorization header', async () => {
+  it('searches products through the existing WebApi route using the session PAT once as Bearer', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         total: 1,
@@ -56,7 +56,7 @@ describe('HttpProductClient', () => {
       keywords: 'iphone case',
       url: '/search'
     });
-    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer tmcp_v1_token-id.secret-value' });
     expect(result).toEqual({
       query: 'iphone case',
       page: 2,
@@ -77,7 +77,7 @@ describe('HttpProductClient', () => {
     });
   });
 
-  it('gets product detail through the documented endpoint using a Bearer access token Authorization header', async () => {
+  it('gets product detail through the existing WebApi route using the same session PAT', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         productId: 'prd_1',
@@ -104,7 +104,7 @@ describe('HttpProductClient', () => {
     const parsedUrl = new URL(url);
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/v3/productdetail/detail');
     expect(JSON.parse(parsedUrl.searchParams.get('body') ?? '{}')).toEqual({ url: '/details/camera-bag.html' });
-    expect(init.headers).toMatchObject({ Authorization: 'Bearer login-access-token' });
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer tmcp_v1_token-id.secret-value' });
     expect(detail).toMatchObject({
       id: 'prd_1',
       sku: 'SKU-1',
@@ -117,6 +117,19 @@ describe('HttpProductClient', () => {
       attributes: [{ name: 'Color', value: 'Black' }],
       images: ['https://example.test/sku-1.jpg']
     });
+  });
+
+  it('rejects a blank session PAT without sending a request or exposing it in the error', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({}));
+    const client = new HttpProductClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const request = client.searchProducts(
+      { query: 'iphone case', page: 1, page_size: 20 },
+      { ...session, accessToken: '   ' }
+    );
+
+    await expect(request).rejects.toMatchObject({ code: 'AUTH_REQUIRED', message: 'AUTH_REQUIRED' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('maps the real product search response sample', async () => {

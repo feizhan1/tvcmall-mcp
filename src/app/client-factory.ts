@@ -31,12 +31,12 @@ export interface TvcMallClients {
 export function createTvcMallClients(config: TvcMallRuntimeConfig = loadRuntimeConfig()): TvcMallClients {
   if (config.dataSource === 'real') {
     return {
-      authClient: new HttpAuthClient({ baseUrl: config.apiBaseUrl, authorization: config.apiAuthorization }),
-      productClient: new HttpProductClient({ baseUrl: config.apiBaseUrl }),
-      pointsClient: new HttpPointsClient({ baseUrl: config.apiBaseUrl }),
-      shippingClient: new HttpShippingClient({ baseUrl: config.apiBaseUrl }),
-      orderClient: new HttpOrderClient({ baseUrl: config.apiBaseUrl }),
-      trackingClient: new HttpTrackingClient({ baseUrl: config.apiBaseUrl })
+      authClient: new HttpAuthClient({ baseUrl: config.webApiBaseUrl, authorization: config.apiAuthorization }),
+      productClient: new HttpProductClient({ baseUrl: config.webApiBaseUrl }),
+      pointsClient: new HttpPointsClient({ baseUrl: config.webApiBaseUrl }),
+      shippingClient: new HttpShippingClient({ baseUrl: config.webApiBaseUrl }),
+      orderClient: new HttpOrderClient({ baseUrl: config.webApiBaseUrl }),
+      trackingClient: new HttpTrackingClient({ baseUrl: config.webApiBaseUrl })
     };
   }
 
