@@ -13,7 +13,9 @@ describe('runtime config', () => {
 
   it.each([
     'https://webapi.tvcmall.test/api/m?secret=query-value',
-    'https://webapi.tvcmall.test/api/m#secret-fragment'
+    'https://webapi.tvcmall.test/api/m#secret-fragment',
+    'https://webapi.test/api/m?',
+    'https://webapi.test/api/m#'
   ])('rejects a WebApi base URL with query or fragment without exposing it: %s', (webApiBaseUrl) => {
     let error: unknown;
     try {

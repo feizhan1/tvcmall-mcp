@@ -79,7 +79,7 @@ function readWebApiBaseUrl(value: string | undefined): string {
     throw new Error('TVCMALL_WEBAPI_BASE_URL must be a valid HTTPS URL');
   }
 
-  if (parsed.search || parsed.hash) {
+  if (/[?#]/.test(url)) {
     throw new Error('TVCMALL_WEBAPI_BASE_URL must not include query parameters or fragments');
   }
   if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) return url;
