@@ -3,25 +3,23 @@ import { formatWhoami } from '../../src/cli/messages.js';
 import type { AuthStatus } from '../../src/tools/auth-status.js';
 
 describe('formatWhoami', () => {
-  it('guides unauthenticated users to run the login command', () => {
-    const message = formatWhoami({ logged_in: false, scopes: [] });
+  it('guides users to configure a PAT in the remote MCP client', () => {
+    const message = formatWhoami({ configured: false });
 
-    expect(message).toContain('当前未登录 TVCMall');
-    expect(message).toContain('npx @tvcmall/mcp login');
+    expect(message).toBe([
+      '当前远程 MCP 会话未配置 PAT。',
+      '请在 MCP Client 的远程 MCP 配置中设置 Authorization: Bearer tmcp_v1_{tokenId}.{secret}。'
+    ].join('\n'));
   });
 
-  it('shows account identity and scopes without token values', () => {
-    const status: AuthStatus = {
-      logged_in: true,
-      customer_email: 'buyer@example.com',
-      scopes: ['products:read', 'orders:read']
-    };
+  it('reports only PAT configuration and defers validity to WebApi calls', () => {
+    const status: AuthStatus = { configured: true };
 
     const message = formatWhoami(status);
 
-    expect(message).toContain('buyer@example.com');
-    expect(message).toContain('products:read, orders:read');
-    expect(message).not.toMatch(/access[_-]?token/i);
-    expect(message).not.toMatch(/refresh[_-]?token/i);
+    expect(message).toBe([
+      '当前远程 MCP 会话已配置 PAT。',
+      'PAT 的最终有效性和权限以实际业务 WebApi 调用结果为准。'
+    ].join('\n'));
   });
 });
