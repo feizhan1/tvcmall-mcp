@@ -74,7 +74,7 @@ export async function estimateShippingForMcp(
   input: EstimateShippingInput,
   dependencies: ShippingToolDependencies
 ): Promise<CallToolResult> {
-  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
+  const session = dependencies.authContext?.pat && toStoredAuthSession(dependencies.authContext);
 
   if (!session) {
     return {
@@ -87,8 +87,6 @@ export async function estimateShippingForMcp(
       ]
     };
   }
-  if (!session.scopes.includes('shipping:estimate')) return permissionDeniedResult();
-
   const parsedInput = EstimateShippingInputSchema.parse(input);
   const shippingClient = dependencies.shippingClient ?? new FakeShippingClient();
   const result = await shippingClient.estimateShipping(parsedInput, session);
@@ -102,10 +100,6 @@ export async function estimateShippingForMcp(
     ],
     structuredContent: { ...result }
   };
-}
-
-function permissionDeniedResult(): CallToolResult {
-  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }
 
 function formatShippingEstimate(result: z.infer<typeof EstimateShippingOutputSchema>): string {

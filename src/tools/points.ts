@@ -43,9 +43,8 @@ export interface PointsToolDependencies {
 }
 
 export async function getPointsForMcp(_input: GetPointsInput, dependencies: PointsToolDependencies): Promise<CallToolResult> {
-  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
+  const session = dependencies.authContext?.pat && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
-  if (!session.scopes.includes('points:read')) return permissionDeniedResult();
 
   const pointsClient = dependencies.pointsClient ?? new FakePointsClient();
   const result = await pointsClient.getPoints(session);
@@ -57,9 +56,8 @@ export async function getPointsForMcp(_input: GetPointsInput, dependencies: Poin
 }
 
 export async function listPointRecordsForMcp(input: ListPointRecordsInput, dependencies: PointsToolDependencies): Promise<CallToolResult> {
-  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
+  const session = dependencies.authContext?.pat && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
-  if (!session.scopes.includes('points:read')) return permissionDeniedResult();
 
   const parsedInput = ListPointRecordsInputSchema.parse(input);
   const pointsClient = dependencies.pointsClient ?? new FakePointsClient();
@@ -73,8 +71,4 @@ export async function listPointRecordsForMcp(input: ListPointRecordsInput, depen
 
 function authRequiredResult(): CallToolResult {
   return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.AUTH_REQUIRED }] };
-}
-
-function permissionDeniedResult(): CallToolResult {
-  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }

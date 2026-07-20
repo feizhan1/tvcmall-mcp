@@ -66,9 +66,8 @@ export interface OrderToolDependencies {
 }
 
 export async function listOrdersForMcp(input: ListOrdersInput, dependencies: OrderToolDependencies): Promise<CallToolResult> {
-  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
+  const session = dependencies.authContext?.pat && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
-  if (!session.scopes.includes('orders:read')) return permissionDeniedResult();
 
   const parsedInput = ListOrdersInputSchema.parse(input);
   const orderClient = dependencies.orderClient ?? new FakeOrderClient();
@@ -81,9 +80,8 @@ export async function listOrdersForMcp(input: ListOrdersInput, dependencies: Ord
 }
 
 export async function getOrderDetailForMcp(input: GetOrderDetailInput, dependencies: OrderToolDependencies): Promise<CallToolResult> {
-  const session = dependencies.authContext && toStoredAuthSession(dependencies.authContext);
+  const session = dependencies.authContext?.pat && toStoredAuthSession(dependencies.authContext);
   if (!session) return authRequiredResult();
-  if (!session.scopes.includes('orders:read')) return permissionDeniedResult();
 
   const parsedInput = GetOrderDetailInputSchema.parse(input);
   const orderClient = dependencies.orderClient ?? new FakeOrderClient();
@@ -101,10 +99,6 @@ export async function getOrderDetailForMcp(input: GetOrderDetailInput, dependenc
 
 function authRequiredResult(): CallToolResult {
   return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.AUTH_REQUIRED }] };
-}
-
-function permissionDeniedResult(): CallToolResult {
-  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }
 
 function formatOrderList(result: z.infer<typeof ListOrdersOutputSchema>): string {

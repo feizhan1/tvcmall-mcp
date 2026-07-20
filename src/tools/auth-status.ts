@@ -3,10 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { RequestAuthContext } from '../auth/request-auth-context.js';
 
 export const AuthStatusOutputSchema = z.object({
-  logged_in: z.boolean(),
-  display_name: z.string().optional(),
-  customer_email: z.string().email().optional(),
-  scopes: z.array(z.string())
+  configured: z.boolean()
 });
 
 export type AuthStatus = z.infer<typeof AuthStatusOutputSchema>;
@@ -17,18 +14,7 @@ export function getAuthStatus(
   authContextOrLegacy?: RequestAuthContext | unknown,
   _legacyOptions?: unknown
 ): AuthStatus {
-  if (!isRequestAuthContext(authContextOrLegacy)) {
-    return {
-      logged_in: false,
-      scopes: []
-    };
-  }
-
-  return {
-    logged_in: true,
-    display_name: authContextOrLegacy.displayName,
-    scopes: [...authContextOrLegacy.scopes]
-  };
+  return { configured: isRequestAuthContext(authContextOrLegacy) };
 }
 
 export function createAuthStatusToolResult(authContext?: RequestAuthContext): CallToolResult;
@@ -53,10 +39,6 @@ export function createAuthStatusToolResult(
 function isRequestAuthContext(value: unknown): value is RequestAuthContext {
   return typeof value === 'object'
     && value !== null
-    && 'customerId' in value
-    && 'displayName' in value
-    && 'upstreamAccessToken' in value
-    && 'expiresAt' in value
-    && 'apiKeyFingerprint' in value
-    && Array.isArray((value as RequestAuthContext).scopes);
+    && typeof (value as RequestAuthContext).pat === 'string'
+    && (value as RequestAuthContext).pat.length > 0;
 }

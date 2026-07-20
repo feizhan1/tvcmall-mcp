@@ -1,33 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createPatAuthContext } from '../../src/auth/request-auth-context.js';
 import { EstimateShippingInputSchema, estimateShippingForMcp } from '../../src/tools/shipping.js';
 import { FakeShippingClient } from '../../src/shipping/fake-shipping-client.js';
 
-const authContext = {
-  customerId: 'customer_123', displayName: 'TVCMall Buyer', scopes: ['shipping:estimate'],
-  upstreamAccessToken: 'short-lived-token', expiresAt: '2030-01-01T00:00:00.000Z', apiKeyFingerprint: 'fingerprint'
-};
+const pat = 'tmcp_v1_token-id.secret-value';
+const authContext = createPatAuthContext(pat);
 const input = { sku: 'TVC-IP15-CASE-CLEAR', quantity: 10, countrycode: 'US' };
 
 describe('estimateShippingForMcp', () => {
-  it('returns API Key auth required when request auth context is missing', async () => {
+  it('returns PAT auth required when request auth context is missing', async () => {
     const result = await estimateShippingForMcp(input, { shippingClient: new FakeShippingClient() });
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result)).toContain('AUTH_REQUIRED');
   });
 
-  it('returns shipping options without short-lived token values', async () => {
+  it('returns shipping options without PAT values', async () => {
     const result = await estimateShippingForMcp(input, { authContext, shippingClient: new FakeShippingClient() });
     expect(result.structuredContent).toMatchObject({ destination_country: 'US', currency: 'USD', options: expect.any(Array) });
-    expect(JSON.stringify(result)).not.toContain('short-lived-token');
+    expect(JSON.stringify(result)).not.toContain(pat);
   });
 
-  it('does not call shipping client when shipping:estimate is absent', async () => {
+  it('calls the shipping client without a local scope list', async () => {
     const shippingClient = new FakeShippingClient();
     const estimateShipping = vi.spyOn(shippingClient, 'estimateShipping');
-    const result = await estimateShippingForMcp(input, { authContext: { ...authContext, scopes: [] }, shippingClient });
-    expect(result.isError).toBe(true);
-    expect(JSON.stringify(result)).toContain('PERMISSION_DENIED');
-    expect(estimateShipping).not.toHaveBeenCalled();
+    const result = await estimateShippingForMcp(input, { authContext, shippingClient });
+    expect(result.isError).toBeUndefined();
+    expect(estimateShipping).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ accessToken: pat, scopes: [] }));
   });
 
   it('accepts product shipping input and rejects order_id only input', () => {

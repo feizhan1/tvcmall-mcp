@@ -7,13 +7,29 @@ export interface HttpClientOptions {
 
 export type JsonObject = Record<string, unknown>;
 
+export type WebApiErrorCode = 'AUTH_REQUIRED' | 'PERMISSION_DENIED' | 'RATE_LIMITED' | 'API_UNAVAILABLE';
+
+export class WebApiRequestError extends Error {
+  constructor(readonly code: WebApiErrorCode) {
+    super(code);
+    this.name = 'WebApiRequestError';
+  }
+}
+
 export abstract class BaseHttpClient {
   protected readonly baseUrl: string;
   protected readonly fetchImpl: typeof fetch;
 
   constructor(options: HttpClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
-    this.fetchImpl = options.fetch ?? fetch;
+    const fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = (async (...args: Parameters<typeof fetch>) => {
+      try {
+        return await fetchImpl(...args);
+      } catch {
+        throw new WebApiRequestError('API_UNAVAILABLE');
+      }
+    }) as typeof fetch;
   }
 
   protected createUrl(path: string, params: Record<string, string | undefined> = {}): string {
@@ -26,7 +42,7 @@ export abstract class BaseHttpClient {
 
   protected authHeaders(session: StoredAuthSession, json = false): Record<string, string> {
     if (!session.accessToken) {
-      throw new Error('HTTP API request requires a login access token');
+      throw new WebApiRequestError('AUTH_REQUIRED');
     }
 
     return {
@@ -38,7 +54,7 @@ export abstract class BaseHttpClient {
 
   protected async readJson(response: Response, context: string): Promise<JsonObject> {
     if (!response.ok) {
-      throw new Error(`${context} failed: ${response.status}`);
+      throw new WebApiRequestError(webApiErrorCodeForStatus(response.status));
     }
 
     const parsed = await response.json() as unknown;
@@ -47,6 +63,13 @@ export abstract class BaseHttpClient {
     }
     return parsed;
   }
+}
+
+function webApiErrorCodeForStatus(status: number): WebApiErrorCode {
+  if (status === 401) return 'AUTH_REQUIRED';
+  if (status === 403) return 'PERMISSION_DENIED';
+  if (status === 429) return 'RATE_LIMITED';
+  return 'API_UNAVAILABLE';
 }
 
 export function unwrapPayload(body: JsonObject): JsonObject {

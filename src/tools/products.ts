@@ -68,8 +68,6 @@ export async function searchProductsForMcp(
   if (!session) {
     return authRequiredResult();
   }
-  if (!session.scopes.includes('products:read')) return permissionDeniedResult();
-
   const parsedInput = SearchProductsInputSchema.parse(input);
   const productClient = dependencies.productClient ?? new FakeProductClient();
   const result = await productClient.searchProducts(parsedInput, session);
@@ -94,8 +92,6 @@ export async function getProductDetailForMcp(
   if (!session) {
     return authRequiredResult();
   }
-  if (!session.scopes.includes('products:read')) return permissionDeniedResult();
-
   const parsedInput = GetProductDetailInputSchema.parse(input);
   const productClient = dependencies.productClient ?? new FakeProductClient();
   const detail = await productClient.getProductDetail(parsedInput.product_id, session);
@@ -124,7 +120,9 @@ export async function getProductDetailForMcp(
 }
 
 function getToolSession(dependencies: ProductToolDependencies) {
-  return dependencies.authContext && toStoredAuthSession(dependencies.authContext);
+  return dependencies.authContext?.pat
+    ? toStoredAuthSession(dependencies.authContext)
+    : undefined;
 }
 
 function authRequiredResult(): CallToolResult {
@@ -137,10 +135,6 @@ function authRequiredResult(): CallToolResult {
       }
     ]
   };
-}
-
-function permissionDeniedResult(): CallToolResult {
-  return { isError: true, content: [{ type: 'text', text: MCP_ERROR_MESSAGES.PERMISSION_DENIED }] };
 }
 
 function formatProductSearchSummary(result: z.infer<typeof SearchProductsOutputSchema>): string {

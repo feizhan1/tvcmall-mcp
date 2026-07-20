@@ -1,47 +1,45 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createPatAuthContext } from '../../src/auth/request-auth-context.js';
 import { getOrderDetailForMcp, listOrdersForMcp } from '../../src/tools/orders.js';
 import { FakeOrderClient } from '../../src/orders/fake-order-client.js';
 
-const authContext = {
-  customerId: 'customer_123', displayName: 'TVCMall Buyer', scopes: ['orders:read'],
-  upstreamAccessToken: 'short-lived-token', expiresAt: '2030-01-01T00:00:00.000Z', apiKeyFingerprint: 'fingerprint'
-};
+const pat = 'tmcp_v1_token-id.secret-value';
+const authContext = createPatAuthContext(pat);
 
 describe('order MCP tools', () => {
-  it('passes the request-scoped upstream token to the order client', async () => {
+  it('passes the request-scoped PAT to the order client', async () => {
     const orderClient = new FakeOrderClient();
     const listOrders = vi.spyOn(orderClient, 'listOrders');
     await listOrdersForMcp({ page: 1, page_size: 20 }, { authContext, orderClient });
 
     expect(listOrders).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      customer: { id: 'customer_123', email: '', name: 'TVCMall Buyer' },
-      accessToken: 'short-lived-token', scopes: ['orders:read'], expiresAt: '2030-01-01T00:00:00.000Z'
+      accessToken: pat,
+      scopes: []
     }));
   });
 
-  it('returns API Key auth required when request auth context is missing', async () => {
+  it('returns PAT auth required when request auth context is missing', async () => {
     const result = await listOrdersForMcp({ page: 1, page_size: 20 }, { orderClient: new FakeOrderClient() });
     expect(result.isError).toBe(true);
-    expect(JSON.stringify(result)).toContain('AUTH_REQUIRED: 缺少或无效的 TVCMall API Key');
+    expect(JSON.stringify(result)).toContain('AUTH_REQUIRED: 缺少或无效的 TVCMall MCP PAT');
   });
 
-  it('does not call order client when orders:read is absent', async () => {
+  it('calls the order client without a local scope list', async () => {
     const orderClient = new FakeOrderClient();
     const listOrders = vi.spyOn(orderClient, 'listOrders');
-    const result = await listOrdersForMcp({ page: 1, page_size: 20 }, { authContext: { ...authContext, scopes: ['products:read'] }, orderClient });
-    expect(result.isError).toBe(true);
-    expect(JSON.stringify(result)).toContain('PERMISSION_DENIED');
-    expect(listOrders).not.toHaveBeenCalled();
+    const result = await listOrdersForMcp({ page: 1, page_size: 20 }, { authContext, orderClient });
+    expect(result.isError).toBeUndefined();
+    expect(listOrders).toHaveBeenCalled();
   });
 
-  it('returns summarized orders and order detail without short-lived token values', async () => {
+  it('returns summarized orders and order detail without PAT values', async () => {
     const orderClient = new FakeOrderClient();
     const orders = await listOrdersForMcp({ page: 1, page_size: 2, status: 'shipped' }, { authContext, orderClient });
     const detail = await getOrderDetailForMcp({ order_id: 'V10001' }, { authContext, orderClient });
 
     expect(orders.structuredContent).toMatchObject({ page: 1, page_size: 2, total: expect.any(Number), items: expect.any(Array) });
     expect(detail.structuredContent).toMatchObject({ id: 'V10001', status: 'shipped', totals: expect.objectContaining({ currency: 'USD' }) });
-    expect(JSON.stringify([orders, detail])).not.toContain('short-lived-token');
+    expect(JSON.stringify([orders, detail])).not.toContain(pat);
   });
 
   it('returns ORDER_NOT_FOUND for missing orders', async () => {
