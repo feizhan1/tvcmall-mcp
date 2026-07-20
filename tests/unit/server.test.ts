@@ -13,15 +13,15 @@ class FakeTokenStore implements TokenStore {
 }
 
 describe('createTvcMallMcpServer', () => {
-  const previousVerifyUrl = process.env.TVCMALL_API_KEY_VERIFY_URL;
+  const previousWebApiBaseUrl = process.env.TVCMALL_WEBAPI_BASE_URL;
 
   beforeEach(() => {
-    process.env.TVCMALL_API_KEY_VERIFY_URL = 'https://auth.test/verify';
+    process.env.TVCMALL_WEBAPI_BASE_URL = 'https://webapi.test';
   });
 
   afterEach(() => {
-    if (previousVerifyUrl === undefined) delete process.env.TVCMALL_API_KEY_VERIFY_URL;
-    else process.env.TVCMALL_API_KEY_VERIFY_URL = previousVerifyUrl;
+    if (previousWebApiBaseUrl === undefined) delete process.env.TVCMALL_WEBAPI_BASE_URL;
+    else process.env.TVCMALL_WEBAPI_BASE_URL = previousWebApiBaseUrl;
   });
 
   it('registers the tvcmall_auth_status tool before connecting a transport', () => {
