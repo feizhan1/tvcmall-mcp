@@ -11,6 +11,36 @@ describe('runtime config', () => {
     expect(() => loadRuntimeConfig(env)).toThrow(/TVCMALL_WEBAPI_BASE_URL/);
   });
 
+  it.each([
+    'https://webapi.tvcmall.test/api/m?secret=query-value',
+    'https://webapi.tvcmall.test/api/m#secret-fragment'
+  ])('rejects a WebApi base URL with query or fragment without exposing it: %s', (webApiBaseUrl) => {
+    let error: unknown;
+    try {
+      loadRuntimeConfig({ TVCMALL_WEBAPI_BASE_URL: webApiBaseUrl });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({ message: 'TVCMALL_WEBAPI_BASE_URL must not include query parameters or fragments' });
+    expect(String(error)).not.toContain(webApiBaseUrl);
+  });
+
+  it('rejects WebApi URL userinfo without exposing credentials or the original URL', () => {
+    const webApiBaseUrl = 'https://user:password@webapi.tvcmall.test';
+    let error: unknown;
+    try {
+      loadRuntimeConfig({ TVCMALL_WEBAPI_BASE_URL: webApiBaseUrl });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({ message: 'TVCMALL_WEBAPI_BASE_URL must be an HTTPS URL' });
+    expect(String(error)).not.toContain('user');
+    expect(String(error)).not.toContain('password');
+    expect(String(error)).not.toContain(webApiBaseUrl);
+  });
+
   it('loads WebApi settings and ignores removed verification service variables', () => {
     expect(loadRuntimeConfig({
       TVCMALL_WEBAPI_BASE_URL: ' https://sandbox-webapi.tvcmall.test/api/m ',

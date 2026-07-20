@@ -9,6 +9,8 @@ export type JsonObject = Record<string, unknown>;
 
 export type WebApiErrorCode = 'AUTH_REQUIRED' | 'PERMISSION_DENIED' | 'RATE_LIMITED' | 'API_UNAVAILABLE';
 
+const PAT_PATTERN = /^tmcp_v1_[^\s.]+\.[^\s.]+$/;
+
 export class WebApiRequestError extends Error {
   constructor(readonly code: WebApiErrorCode) {
     super(code);
@@ -41,7 +43,7 @@ export abstract class BaseHttpClient {
   }
 
   protected authHeaders(session: StoredAuthSession, json = false): Record<string, string> {
-    if (!session.accessToken?.trim()) {
+    if (!session.accessToken || !PAT_PATTERN.test(session.accessToken)) {
       throw new WebApiRequestError('AUTH_REQUIRED');
     }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { WebApiRequestError } from '../../src/api/http-client.js';
 import { HttpProductClient } from '../../src/products/http-product-client.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
 
@@ -129,6 +130,25 @@ describe('HttpProductClient', () => {
     );
 
     await expect(request).rejects.toMatchObject({ code: 'AUTH_REQUIRED', message: 'AUTH_REQUIRED' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a Bearer scheme', 'Bearer tmcp_v1_id.secret'],
+    ['a case-insensitive bearer scheme', 'bEaReR tmcp_v1_id.secret'],
+    ['CR/LF header injection', 'tmcp_v1_id.secret\r\nX-Injected: value']
+  ])('rejects %s instead of constructing an unsafe Authorization header', async (_label, accessToken) => {
+    const fetchMock = vi.fn(async () => jsonResponse({}));
+    const client = new HttpProductClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const error = await client.searchProducts(
+      { query: 'iphone case', page: 1, page_size: 20 },
+      { ...session, accessToken }
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(WebApiRequestError);
+    expect(error).toMatchObject({ code: 'AUTH_REQUIRED', message: 'AUTH_REQUIRED' });
+    expect(String(error)).not.toContain(accessToken);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
