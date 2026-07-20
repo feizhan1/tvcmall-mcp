@@ -6,6 +6,8 @@ export type TvcMallApiEnv = typeof API_ENV_VALUES[number];
 export type TvcMallLogLevel = typeof LOG_LEVEL_VALUES[number];
 export type TvcMallDataSource = typeof DATA_SOURCE_VALUES[number];
 
+const MAX_API_TIMEOUT_MS = 2_147_483_647;
+
 export interface TvcMallRuntimeConfig {
   webApiBaseUrl: string;
   apiTimeoutMs: number;
@@ -32,7 +34,7 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMall
   const apiEnv = readEnum(env.TVCMALL_API_ENV, API_ENV_VALUES) ?? DEFAULT_RUNTIME_CONFIG.apiEnv;
   return {
     webApiBaseUrl: readWebApiBaseUrl(env.TVCMALL_WEBAPI_BASE_URL),
-    apiTimeoutMs: readPositiveInteger(env.TVCMALL_API_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiTimeoutMs,
+    apiTimeoutMs: readApiTimeoutMs(env.TVCMALL_API_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiTimeoutMs,
     apiEnv,
     logLevel: readEnum(env.TVCMALL_LOG_LEVEL, LOG_LEVEL_VALUES) ?? DEFAULT_RUNTIME_CONFIG.logLevel,
     dataSource: readEnum(env.TVCMALL_DATA_SOURCE, DATA_SOURCE_VALUES) ?? DEFAULT_RUNTIME_CONFIG.dataSource,
@@ -55,6 +57,11 @@ function readPositiveInteger(value: string | undefined): number | undefined {
   const parsed = Number(trimmed);
   if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
   return parsed;
+}
+
+function readApiTimeoutMs(value: string | undefined): number | undefined {
+  const parsed = readPositiveInteger(value);
+  return parsed !== undefined && parsed <= MAX_API_TIMEOUT_MS ? parsed : undefined;
 }
 
 function readMcpPath(value: string | undefined): string | undefined {

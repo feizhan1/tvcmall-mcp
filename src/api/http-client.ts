@@ -11,6 +11,7 @@ export type JsonObject = Record<string, unknown>;
 export type WebApiErrorCode = 'AUTH_REQUIRED' | 'PERMISSION_DENIED' | 'RATE_LIMITED' | 'API_UNAVAILABLE';
 
 const PAT_PATTERN = /^tmcp_v1_[^\s.]+\.[^\s.]+$/;
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 export class WebApiRequestError extends Error {
   constructor(readonly code: WebApiErrorCode) {
@@ -85,6 +86,7 @@ export abstract class BaseHttpClient {
   protected async readJson(response: Response, context: string): Promise<JsonObject> {
     try {
       if (!response.ok) {
+        cancelResponseBody(response);
         throw new WebApiRequestError(webApiErrorCodeForStatus(response.status));
       }
 
@@ -107,10 +109,19 @@ export abstract class BaseHttpClient {
 
 function readTimeoutMs(value: number | undefined): number {
   const timeoutMs = value ?? 15000;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT_MS) {
     throw new Error('HTTP client timeoutMs must be a positive safe integer');
   }
   return timeoutMs;
+}
+
+function cancelResponseBody(response: Response): void {
+  if (!response.body) return;
+  try {
+    void response.body.cancel().catch(() => undefined);
+  } catch {
+    // Body cancellation must not replace the stable WebApi status mapping.
+  }
 }
 
 function webApiErrorCodeForStatus(status: number): WebApiErrorCode {

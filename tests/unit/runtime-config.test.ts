@@ -83,6 +83,18 @@ describe('runtime config', () => {
     });
   });
 
+  it('accepts the Node timer maximum and falls back for a larger API timeout', () => {
+    expect(loadRuntimeConfig({
+      TVCMALL_WEBAPI_BASE_URL: 'https://webapi.tvcmall.test',
+      TVCMALL_API_TIMEOUT_MS: '2147483647'
+    }).apiTimeoutMs).toBe(2_147_483_647);
+
+    expect(loadRuntimeConfig({
+      TVCMALL_WEBAPI_BASE_URL: 'https://webapi.tvcmall.test',
+      TVCMALL_API_TIMEOUT_MS: '2147483648'
+    }).apiTimeoutMs).toBe(DEFAULT_RUNTIME_CONFIG.apiTimeoutMs);
+  });
+
   it('ignores blank optional values', () => {
     expect(loadRuntimeConfig({
       TVCMALL_WEBAPI_BASE_URL: 'https://webapi.tvcmall.test',

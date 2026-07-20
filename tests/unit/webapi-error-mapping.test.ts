@@ -19,6 +19,11 @@ class TestHttpClient extends BaseHttpClient {
     const response = await this.fetchImpl(this.createUrl('/test'), { signal });
     return this.readJson(response, 'TVCMall test request');
   }
+
+  async getRequest(request: Request): Promise<JsonObject> {
+    const response = await this.fetchImpl(request);
+    return this.readJson(response, 'TVCMall test request');
+  }
 }
 
 describe('BaseHttpClient WebApi errors', () => {
@@ -31,7 +36,10 @@ describe('BaseHttpClient WebApi errors', () => {
   ] as const)('maps HTTP %s without reading or exposing its response body', async (status, code) => {
     const json = vi.fn(async () => ({ detail: upstreamBodySecret }));
     const text = vi.fn(async () => upstreamBodySecret);
-    const fetchImpl = vi.fn(async () => ({ ok: false, status, json, text }) as unknown as Response);
+    const cancel = vi.fn(async () => {
+      throw new Error(`body cancellation failed for ${pat}: ${upstreamBodySecret}`);
+    });
+    const fetchImpl = vi.fn(async () => ({ ok: false, status, body: { cancel }, json, text }) as unknown as Response);
     const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
 
     let error: unknown;
@@ -43,6 +51,8 @@ describe('BaseHttpClient WebApi errors', () => {
 
     expect(error).toMatchObject({ code });
     expect(String(error)).not.toContain(upstreamBodySecret);
+    expect(String(error)).not.toContain(pat);
+    expect(cancel).toHaveBeenCalledOnce();
     expect(json).not.toHaveBeenCalled();
     expect(text).not.toHaveBeenCalled();
   });
@@ -185,13 +195,73 @@ describe('BaseHttpClient WebApi errors', () => {
     }
   });
 
-  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
+  it('preserves cancellation from a Request signal', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn((_input: URL | RequestInfo, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('request aborted', 'AbortError')), { once: true });
+      }));
+      const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch, timeoutMs: 100 });
+      const callerController = new AbortController();
+      const request = new Request('https://webapi.test/test', { signal: callerController.signal });
+
+      const result = client.getRequest(request).catch((error: unknown) => error);
+      callerController.abort();
+      const error = await result;
+
+      expect(error).toMatchObject({ code: 'API_UNAVAILABLE', message: 'API_UNAVAILABLE' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('isolates timeout cancellation between concurrent requests', async () => {
+    vi.useFakeTimers();
+    try {
+      const signals: AbortSignal[] = [];
+      const fetchImpl = vi.fn((_input: URL | RequestInfo, init?: RequestInit) => {
+        const signal = init?.signal;
+        if (!signal) throw new Error('Expected a request signal');
+        signals.push(signal);
+        if (signals.length === 1) {
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new DOMException('timed out', 'AbortError')), { once: true });
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: vi.fn(async () => ({ request: 'completed' }))
+        } as unknown as Response);
+      });
+      const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch, timeoutMs: 25 });
+
+      const timedOut = client.get().catch((error: unknown) => error);
+      await expect(client.get()).resolves.toEqual({ request: 'completed' });
+      await vi.advanceTimersByTimeAsync(25);
+
+      await expect(timedOut).resolves.toMatchObject({ code: 'API_UNAVAILABLE', message: 'API_UNAVAILABLE' });
+      expect(signals[0]).not.toBe(signals[1]);
+      expect(signals[0]?.aborted).toBe(true);
+      expect(signals[1]?.aborted).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648, Number.MAX_SAFE_INTEGER + 1])(
     'rejects unsafe timeoutMs %s without echoing its value',
     (timeoutMs) => {
       expect(() => new TestHttpClient({ baseUrl: 'https://webapi.test', timeoutMs }))
         .toThrowError('HTTP client timeoutMs must be a positive safe integer');
     }
   );
+
+  it('accepts the maximum Node timer timeout', () => {
+    expect(() => new TestHttpClient({ baseUrl: 'https://webapi.test', timeoutMs: 2_147_483_647 })).not.toThrow();
+  });
 });
 
 describe('registered tool WebApi error wrapper', () => {
