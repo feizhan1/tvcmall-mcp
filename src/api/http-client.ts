@@ -57,7 +57,12 @@ export abstract class BaseHttpClient {
       throw new WebApiRequestError(webApiErrorCodeForStatus(response.status));
     }
 
-    const parsed = await response.json() as unknown;
+    let parsed: unknown;
+    try {
+      parsed = await response.json() as unknown;
+    } catch {
+      throw new WebApiRequestError('API_UNAVAILABLE');
+    }
     if (!isJsonObject(parsed)) {
       throw new Error(`${context} response must be a JSON object`);
     }

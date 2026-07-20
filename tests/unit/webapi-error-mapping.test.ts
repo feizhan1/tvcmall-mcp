@@ -63,6 +63,25 @@ describe('BaseHttpClient WebApi errors', () => {
     expect(error).toMatchObject({ code: 'API_UNAVAILABLE' });
     expect(String(error)).not.toContain(pat);
   });
+
+  it('maps response body read failures without exposing the original error', async () => {
+    const json = vi.fn(async () => {
+      throw new TypeError(`response body interrupted for ${pat}: ${upstreamBodySecret}`);
+    });
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json }) as unknown as Response);
+    const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
+
+    let error: unknown;
+    try {
+      await client.get();
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({ code: 'API_UNAVAILABLE' });
+    expect(String(error)).not.toContain(pat);
+    expect(String(error)).not.toContain(upstreamBodySecret);
+  });
 });
 
 describe('registered tool WebApi error wrapper', () => {
