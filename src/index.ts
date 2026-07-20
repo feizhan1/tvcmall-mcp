@@ -1,9 +1,14 @@
-#!/usr/bin/env node
-import { runCli } from './cli/app.js';
+import { loadRuntimeConfig } from './config/runtime-config.js';
+import { startMcpHttpServer } from './http/mcp-http-server.js';
 import { redactSensitiveData } from './security/redact.js';
 
 try {
-  await runCli(process.argv.slice(2));
+  const config = loadRuntimeConfig();
+  await startMcpHttpServer({
+    host: config.mcpHost,
+    port: config.mcpPort,
+    mcpPath: config.mcpPath
+  });
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`${redactSensitiveData(message)}\n`);
