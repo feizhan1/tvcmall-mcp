@@ -32,11 +32,11 @@ export function createTvcMallClients(config: TvcMallRuntimeConfig = loadRuntimeC
   if (config.dataSource === 'real') {
     return {
       authClient: new HttpAuthClient({ baseUrl: config.webApiBaseUrl, authorization: config.apiAuthorization }),
-      productClient: new HttpProductClient({ baseUrl: config.webApiBaseUrl }),
-      pointsClient: new HttpPointsClient({ baseUrl: config.webApiBaseUrl }),
-      shippingClient: new HttpShippingClient({ baseUrl: config.webApiBaseUrl }),
-      orderClient: new HttpOrderClient({ baseUrl: config.webApiBaseUrl }),
-      trackingClient: new HttpTrackingClient({ baseUrl: config.webApiBaseUrl })
+      productClient: new HttpProductClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
+      pointsClient: new HttpPointsClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
+      shippingClient: new HttpShippingClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
+      orderClient: new HttpOrderClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
+      trackingClient: new HttpTrackingClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs })
     };
   }
 

@@ -37,7 +37,7 @@ describe('createTvcMallClients', () => {
   it('uses HTTP clients when TVCMall data source is real', () => {
     const clients = createTvcMallClients({
       webApiBaseUrl: 'https://webapi.tvcmall.test',
-      apiTimeoutMs: 15000,
+      apiTimeoutMs: 4321,
       apiEnv: 'production',
       logLevel: 'info',
       dataSource: 'real',
@@ -54,6 +54,15 @@ describe('createTvcMallClients', () => {
     expect(clients.trackingClient).toBeInstanceOf(HttpTrackingClient);
     for (const client of Object.values(clients)) {
       expect((client as unknown as { baseUrl: string }).baseUrl).toBe('https://webapi.tvcmall.test');
+    }
+    for (const client of [
+      clients.productClient,
+      clients.orderClient,
+      clients.pointsClient,
+      clients.shippingClient,
+      clients.trackingClient
+    ]) {
+      expect((client as unknown as { timeoutMs: number }).timeoutMs).toBe(4321);
     }
   });
 });

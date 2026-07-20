@@ -3,6 +3,7 @@ import type { StoredAuthSession } from '../storage/token-store.js';
 export interface HttpClientOptions {
   baseUrl: string;
   fetch?: typeof fetch;
+  timeoutMs?: number;
 }
 
 export type JsonObject = Record<string, unknown>;
@@ -21,14 +22,41 @@ export class WebApiRequestError extends Error {
 export abstract class BaseHttpClient {
   protected readonly baseUrl: string;
   protected readonly fetchImpl: typeof fetch;
+  protected readonly timeoutMs: number;
+  private readonly requestCleanups = new WeakMap<Response, () => void>();
 
   constructor(options: HttpClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+    this.timeoutMs = readTimeoutMs(options.timeoutMs);
     const fetchImpl = options.fetch ?? fetch;
-    this.fetchImpl = (async (...args: Parameters<typeof fetch>) => {
+    this.fetchImpl = (async (input: URL | RequestInfo, init?: RequestInit) => {
+      const controller = new AbortController();
+      const callerSignals = new Set<AbortSignal>();
+      if (init?.signal) callerSignals.add(init.signal);
+      if (typeof Request !== 'undefined' && input instanceof Request) callerSignals.add(input.signal);
+
+      const abortFromCaller = () => controller.abort();
+      for (const signal of callerSignals) {
+        if (signal.aborted) abortFromCaller();
+        else signal.addEventListener('abort', abortFromCaller, { once: true });
+      }
+
+      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      timeout.unref?.();
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        clearTimeout(timeout);
+        for (const signal of callerSignals) signal.removeEventListener('abort', abortFromCaller);
+      };
+
       try {
-        return await fetchImpl(...args);
+        const response = await fetchImpl(input, { ...init, signal: controller.signal });
+        this.requestCleanups.set(response, cleanup);
+        return response;
       } catch {
+        cleanup();
         throw new WebApiRequestError('API_UNAVAILABLE');
       }
     }) as typeof fetch;
@@ -55,21 +83,34 @@ export abstract class BaseHttpClient {
   }
 
   protected async readJson(response: Response, context: string): Promise<JsonObject> {
-    if (!response.ok) {
-      throw new WebApiRequestError(webApiErrorCodeForStatus(response.status));
-    }
-
-    let parsed: unknown;
     try {
-      parsed = await response.json() as unknown;
-    } catch {
-      throw new WebApiRequestError('API_UNAVAILABLE');
+      if (!response.ok) {
+        throw new WebApiRequestError(webApiErrorCodeForStatus(response.status));
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = await response.json() as unknown;
+      } catch {
+        throw new WebApiRequestError('API_UNAVAILABLE');
+      }
+      if (!isJsonObject(parsed)) {
+        throw new Error(`${context} response must be a JSON object`);
+      }
+      return parsed;
+    } finally {
+      this.requestCleanups.get(response)?.();
+      this.requestCleanups.delete(response);
     }
-    if (!isJsonObject(parsed)) {
-      throw new Error(`${context} response must be a JSON object`);
-    }
-    return parsed;
   }
+}
+
+function readTimeoutMs(value: number | undefined): number {
+  const timeoutMs = value ?? 15000;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error('HTTP client timeoutMs must be a positive safe integer');
+  }
+  return timeoutMs;
 }
 
 function webApiErrorCodeForStatus(status: number): WebApiErrorCode {
