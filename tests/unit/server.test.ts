@@ -28,15 +28,18 @@ describe('createTvcMallMcpServer', () => {
     const server = createTvcMallMcpServer({ tokenStore: new FakeTokenStore() });
     const registeredTools = (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools;
 
-    expect(Object.keys(registeredTools)).toContain('tvcmall_auth_status');
-    expect(Object.keys(registeredTools)).toContain('tvcmall_search_products');
-    expect(Object.keys(registeredTools)).toContain('tvcmall_estimate_shipping');
-    expect(Object.keys(registeredTools)).toContain('tvcmall_batch_get_tracking');
-    expect(Object.keys(registeredTools)).toContain('tvcmall_export_orders');
-    expect(Object.keys(registeredTools)).toContain('tvcmall_get_tracking_info');
-    expect(Object.keys(registeredTools)).toContain('tvcmall_get_order_detail');
-    expect(Object.keys(registeredTools)).toContain('tvcmall_list_orders');
-    expect(Object.keys(registeredTools)).toContain('tvcmall_get_product_detail');
+    expect(Object.keys(registeredTools).sort()).toEqual([
+      'tvcmall_auth_status',
+      'tvcmall_batch_get_tracking',
+      'tvcmall_estimate_shipping',
+      'tvcmall_get_order_detail',
+      'tvcmall_get_points',
+      'tvcmall_get_product_detail',
+      'tvcmall_get_tracking_info',
+      'tvcmall_list_orders',
+      'tvcmall_list_point_records',
+      'tvcmall_search_products'
+    ]);
   });
 
   it('guides order logistics and shipping fee requests to the tracking tool', () => {

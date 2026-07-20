@@ -6,8 +6,7 @@ export const FAKE_AUTH_SCOPES = [
   'products:read',
   'shipping:estimate',
   'orders:read',
-  'tracking:read',
-  'orders:export'
+  'tracking:read'
 ] as const;
 
 export interface FakeAuthClientOptions {

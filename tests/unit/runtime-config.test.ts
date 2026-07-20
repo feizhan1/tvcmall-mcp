@@ -53,8 +53,6 @@ describe('runtime config', () => {
       TVCMALL_MCP_HOST: ' 127.0.0.1 ',
       TVCMALL_MCP_PORT: '3100',
       TVCMALL_MCP_PATH: ' /customer-mcp ',
-      TVCMALL_EXPORT_DIR: ' /tmp/tvcmall-exports ',
-      TVCMALL_EXPORT_TTL_MS: '7200000',
       TVCMALL_API_KEY_VERIFY_URL: 'not a URL',
       TVCMALL_API_KEY_VERIFY_TIMEOUT_MS: '1',
       TVCMALL_ALLOW_INSECURE_API_KEY_VERIFY_URL_FOR_DEVELOPMENT: 'true',
@@ -68,8 +66,6 @@ describe('runtime config', () => {
       mcpHost: '127.0.0.1',
       mcpPort: 3100,
       mcpPath: '/customer-mcp',
-      exportDir: '/tmp/tvcmall-exports',
-      exportTtlMs: 7200000,
       apiAuthorization: 'login-api-authorization-example',
       dataSource: 'real'
     });
@@ -89,7 +85,6 @@ describe('runtime config', () => {
 
   it('ignores blank optional values', () => {
     expect(loadRuntimeConfig({
-      TVCMALL_EXPORT_DIR: '   ',
       TVCMALL_WEBAPI_BASE_URL: 'https://webapi.tvcmall.test',
       TVCMALL_API_AUTHORIZATION: '   '
     })).toEqual({

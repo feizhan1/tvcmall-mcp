@@ -12,7 +12,6 @@ import type { ShippingClient } from '../shipping/shipping-client.js';
 import type { TokenStore } from '../storage/token-store.js';
 import type { TrackingClient } from '../tracking/tracking-client.js';
 import { AuthStatusOutputSchema, createAuthStatusToolResult } from '../tools/auth-status.js';
-import { ExportOrdersInputSchema, ExportOrdersOutputSchema, exportOrdersForMcp } from '../tools/export-orders.js';
 import {
   GetOrderDetailInputSchema,
   ListOrdersInputSchema,
@@ -113,12 +112,6 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
     'tvcmall_batch_get_tracking',
     { title: 'TVCMall Batch Get Tracking', description: '批量查询 TVCMall 订单物流和运费信息；单个订单物流或运费优先使用 tvcmall_get_tracking_info。', inputSchema: BatchGetTrackingInputSchema, outputSchema: BatchTrackingOutputSchema },
     async (input) => handleToolCall(() => batchGetTrackingForMcp(input, { authContext, trackingClient }))
-  );
-
-  server.registerTool(
-    'tvcmall_export_orders',
-    { title: 'TVCMall Export Orders', description: '使用假订单数据导出 CSV 文件，xlsx 暂未实现', inputSchema: ExportOrdersInputSchema, outputSchema: ExportOrdersOutputSchema },
-    async (input) => exportOrdersForMcp(input, { authContext, orderClient })
   );
 
 }

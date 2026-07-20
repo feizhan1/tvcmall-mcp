@@ -4,8 +4,7 @@ export const MCP_ERROR_MESSAGES = {
   PERMISSION_DENIED: 'PERMISSION_DENIED: 当前 PAT 没有该权限',
   RATE_LIMITED: 'RATE_LIMITED: 请求过快，请稍后再试',
   VALIDATION_ERROR: '参数格式错误',
-  API_UNAVAILABLE: 'API_UNAVAILABLE: TVCMall 服务暂不可用',
-  EXPORT_TOO_LARGE: '导出范围过大，请缩小时间范围'
+  API_UNAVAILABLE: 'API_UNAVAILABLE: TVCMall 服务暂不可用'
 } as const;
 
 export type McpErrorCode = keyof typeof MCP_ERROR_MESSAGES;

@@ -1,7 +1,7 @@
 {
   "name": "@tvcmall/mcp",
   "version": "0.1.0",
-  "description": "Local MCP server for TVCMall customer product, order, tracking, and export workflows.",
+  "description": "TVCMall remote Streamable HTTP MCP server for read-only queries through the PAT-authenticated TVCMall WebApi.",
   "type": "module",
   "bin": {
     "tvcmall-mcp": "./dist/index.js"
@@ -12,7 +12,7 @@
     "docs"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "start": "node dist/index.js",

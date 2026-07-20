@@ -15,8 +15,6 @@ export interface TvcMallRuntimeConfig {
   mcpHost: string;
   mcpPort: number;
   mcpPath: string;
-  exportDir?: string;
-  exportTtlMs: number;
   apiAuthorization?: string;
 }
 
@@ -28,7 +26,6 @@ export const DEFAULT_RUNTIME_CONFIG = {
   mcpHost: '127.0.0.1',
   mcpPort: 3000,
   mcpPath: '/mcp',
-  exportTtlMs: 3600000
 } satisfies Omit<TvcMallRuntimeConfig, 'webApiBaseUrl'>;
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMallRuntimeConfig {
@@ -42,8 +39,6 @@ export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMall
     mcpHost: readString(env.TVCMALL_MCP_HOST) ?? DEFAULT_RUNTIME_CONFIG.mcpHost,
     mcpPort: readPositiveInteger(env.TVCMALL_MCP_PORT) ?? DEFAULT_RUNTIME_CONFIG.mcpPort,
     mcpPath: readMcpPath(env.TVCMALL_MCP_PATH) ?? DEFAULT_RUNTIME_CONFIG.mcpPath,
-    ...readOptionalValue('exportDir', env.TVCMALL_EXPORT_DIR),
-    exportTtlMs: readPositiveInteger(env.TVCMALL_EXPORT_TTL_MS) ?? DEFAULT_RUNTIME_CONFIG.exportTtlMs,
     ...readOptionalValue('apiAuthorization', env.TVCMALL_API_AUTHORIZATION)
   };
 }
@@ -92,7 +87,7 @@ function readEnum<T extends readonly string[]>(value: string | undefined, allowe
   return allowedValues.includes(trimmed) ? trimmed : undefined;
 }
 
-function readOptionalValue<K extends 'exportDir' | 'apiAuthorization'>(key: K, value: string | undefined): Pick<TvcMallRuntimeConfig, K> | Record<string, never> {
+function readOptionalValue<K extends 'apiAuthorization'>(key: K, value: string | undefined): Pick<TvcMallRuntimeConfig, K> | Record<string, never> {
   const parsed = readString(value);
   return parsed ? { [key]: parsed } as Pick<TvcMallRuntimeConfig, K> : {};
 }

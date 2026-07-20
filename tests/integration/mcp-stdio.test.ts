@@ -12,7 +12,7 @@ describe('MCP stdio harness', () => {
     const harness = await createMcpStdioHarness({
       command: process.execPath,
       args: ['--import', 'tsx', 'src/harness/stdio-server.ts'],
-      env: { TVCMALL_API_KEY_VERIFY_URL: 'https://auth.test/verify' }
+      env: { TVCMALL_WEBAPI_BASE_URL: 'https://webapi.test' }
     });
     harnesses.push(harness);
 
@@ -25,8 +25,7 @@ describe('MCP stdio harness', () => {
       'tvcmall_auth_status',
       'tvcmall_search_products',
       'tvcmall_get_points',
-      'tvcmall_list_point_records',
-      'tvcmall_export_orders'
+      'tvcmall_list_point_records'
     ]));
 
     const searchResponse = await harness.request('tools/call', {
@@ -34,7 +33,7 @@ describe('MCP stdio harness', () => {
       arguments: { query: 'iphone case', page: 1, page_size: 2 }
     });
 
-    expect(JSON.stringify(searchResponse.result)).toContain('AUTH_REQUIRED: 缺少或无效的 TVCMall API Key');
+    expect(JSON.stringify(searchResponse.result)).toContain('AUTH_REQUIRED: 缺少或无效的 TVCMall MCP PAT');
     expect(await harness.stderr()).toBe('');
   });
 });

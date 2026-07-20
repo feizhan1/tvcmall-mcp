@@ -24,7 +24,6 @@ describe('createTvcMallClients', () => {
       mcpHost: '127.0.0.1',
       mcpPort: 3000,
       mcpPath: '/mcp',
-      exportTtlMs: 3600000
     });
 
     expect(clients.authClient).toBeInstanceOf(FakeAuthClient);
@@ -45,7 +44,6 @@ describe('createTvcMallClients', () => {
       mcpHost: '127.0.0.1',
       mcpPort: 3000,
       mcpPath: '/mcp',
-      exportTtlMs: 3600000
     });
 
     expect(clients.authClient).toBeInstanceOf(HttpAuthClient);
