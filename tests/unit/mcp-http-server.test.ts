@@ -1,26 +1,61 @@
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { describe, expect, it, vi } from 'vitest';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { RequestAuthContext } from '../../src/auth/request-auth-context.js';
 import { createMcpHttpServer, type McpHttpServerOptions } from '../../src/http/mcp-http-server.js';
 
+interface TransportDouble {
+  close: Mock<() => Promise<void>>;
+  handleRequest(req: IncomingMessage, res: ServerResponse, body?: unknown): Promise<void>;
+  onclose?: () => void;
+  sessionId?: string;
+}
+
+type TransportHandler = (transport: TransportDouble, req: IncomingMessage, res: ServerResponse, body?: unknown) => Promise<void>;
+
+const transportHarness = vi.hoisted(() => ({
+  handlers: [] as TransportHandler[],
+  instances: [] as TransportDouble[]
+}));
+
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
   StreamableHTTPServerTransport: class {
-    readonly sessionId: string;
+    readonly generatedSessionId: string;
+    sessionId?: string;
     onclose?: () => void;
+    close = vi.fn(async () => {
+      this.onclose?.();
+    });
 
     constructor(options: { sessionIdGenerator: () => string }) {
-      this.sessionId = options.sessionIdGenerator();
+      this.generatedSessionId = options.sessionIdGenerator();
+      transportHarness.instances.push(this);
     }
 
-    async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-      res.writeHead(200, { 'mcp-session-id': this.sessionId });
+    async handleRequest(req: IncomingMessage, res: ServerResponse, body?: unknown): Promise<void> {
+      const handler = transportHarness.handlers.shift();
+      if (handler) return handler(this, req, res, body);
+      if (isInitializeBody(body)) this.sessionId = this.generatedSessionId;
+      res.writeHead(200, { 'mcp-session-id': this.generatedSessionId });
       res.end(JSON.stringify({ method: req.method }));
       if (req.method === 'DELETE') this.onclose?.();
     }
   }
 }));
+
+const createdServers: Server[] = [];
+
+beforeEach(() => {
+  transportHarness.handlers.length = 0;
+  transportHarness.instances.length = 0;
+});
+
+afterEach(async () => {
+  for (const server of createdServers.splice(0)) server.emit('close');
+  await Promise.resolve();
+  vi.useRealTimers();
+});
 
 interface DispatchOptions {
   server?: ReturnType<typeof createMcpHttpServer>;
@@ -141,10 +176,216 @@ describe('createMcpHttpServer', () => {
     expect(response.body).not.toContain(firstPat);
     if (pat) expect(response.body).not.toContain(pat);
   });
+
+  it('releases capacity and closes the transport when server.connect fails', async () => {
+    const server = createTestServer({
+      maxSessions: 1,
+      connect: async (index) => {
+        if (index === 0) throw new Error('connect failed');
+      }
+    });
+
+    const failed = await initialize(server, 'tmcp_v1_failed.secret');
+    const succeeded = await initialize(server, 'tmcp_v1_succeeded.secret');
+
+    expect(failed.status).toBe(400);
+    expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
+    expect(succeeded.status).toBe(200);
+  });
+
+  it('releases capacity and closes the connection when initialize handling fails', async () => {
+    transportHarness.handlers.push(async () => {
+      throw new Error('initialize failed');
+    });
+    const server = createTestServer({ maxSessions: 1 });
+
+    const failed = await initialize(server, 'tmcp_v1_failed.secret');
+    const succeeded = await initialize(server, 'tmcp_v1_succeeded.secret');
+
+    expect(failed.status).toBe(400);
+    expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
+    expect(succeeded.status).toBe(200);
+  });
+
+  it('does not retain a session when initialize returns a non-success response', async () => {
+    transportHarness.handlers.push(async (_transport, _req, res) => {
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: 'invalid initialize' }));
+    });
+    const server = createTestServer({ maxSessions: 1 });
+
+    const failed = await initialize(server, 'tmcp_v1_failed.secret');
+    const succeeded = await initialize(server, 'tmcp_v1_succeeded.secret');
+
+    expect(failed.status).toBe(400);
+    expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
+    expect(succeeded.status).toBe(200);
+  });
+
+  it('rejects new sessions at capacity without disrupting an existing session', async () => {
+    const firstPat = 'tmcp_v1_first.secret';
+    const secondPat = 'tmcp_v1_second.secret';
+    const server = createTestServer({ maxSessions: 1 });
+    const initialized = await initialize(server, firstPat);
+
+    const rejected = await initialize(server, secondPat);
+    const existing = await dispatch({
+      server,
+      method: 'POST',
+      authorization: `Bearer ${firstPat}`,
+      sessionId: initialized.headers['mcp-session-id'],
+      body: { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }
+    });
+
+    expect(rejected.status).toBe(503);
+    expect(JSON.parse(rejected.body)).toEqual({ error: { code: 'SESSION_CAPACITY_REACHED' } });
+    expect(rejected.body).not.toContain(secondPat);
+    expect(existing.status).toBe(200);
+  });
+
+  it('counts pending initializations against session capacity', async () => {
+    let releaseConnect!: () => void;
+    let signalConnectStarted!: () => void;
+    const connectStarted = new Promise<void>((resolve) => {
+      signalConnectStarted = resolve;
+    });
+    const connectPending = new Promise<void>((resolve) => {
+      releaseConnect = resolve;
+    });
+    const server = createTestServer({
+      maxSessions: 1,
+      connect: async (index) => {
+        if (index === 0) {
+          signalConnectStarted();
+          await connectPending;
+        }
+      }
+    });
+
+    const firstResponse = initialize(server, 'tmcp_v1_pending.secret');
+    await connectStarted;
+    const rejected = await initialize(server, 'tmcp_v1_racing.secret');
+    releaseConnect();
+
+    expect(rejected.status).toBe(503);
+    expect(await firstResponse).toMatchObject({ status: 200 });
+  });
+
+  it('expires an idle session, closes its transport, and returns 404 afterwards', async () => {
+    vi.useFakeTimers();
+    const pat = 'tmcp_v1_idle.secret';
+    const server = createTestServer({ sessionIdleTtlMs: 100 });
+    const initialized = await initialize(server, pat);
+    const sessionId = initialized.headers['mcp-session-id'];
+
+    await vi.advanceTimersByTimeAsync(100);
+    const expired = await dispatch({ server, method: 'POST', authorization: `Bearer ${pat}`, sessionId, body: {} });
+
+    expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
+    expect(expired.status).toBe(404);
+    expect(JSON.parse(expired.body)).toEqual({ error: { code: 'SESSION_NOT_FOUND' } });
+  });
+
+  it('refreshes the idle TTL after an active request completes', async () => {
+    vi.useFakeTimers();
+    const pat = 'tmcp_v1_active.secret';
+    const server = createTestServer({ sessionIdleTtlMs: 100 });
+    const initialized = await initialize(server, pat);
+    const sessionId = initialized.headers['mcp-session-id'];
+
+    await vi.advanceTimersByTimeAsync(90);
+    const active = await dispatch({ server, method: 'POST', authorization: `Bearer ${pat}`, sessionId, body: {} });
+    await vi.advanceTimersByTimeAsync(99);
+
+    expect(active.status).toBe(200);
+    expect(transportHarness.instances[0]?.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([undefined, 'tmcp_v1_replaced.secret'])('does not refresh idle TTL for a missing or mismatched PAT (%s)', async (pat) => {
+    vi.useFakeTimers();
+    const originalPat = 'tmcp_v1_original.secret';
+    const server = createTestServer({ sessionIdleTtlMs: 100 });
+    const initialized = await initialize(server, originalPat);
+    const sessionId = initialized.headers['mcp-session-id'];
+
+    await vi.advanceTimersByTimeAsync(90);
+    const rejected = await dispatch({
+      server,
+      method: 'POST',
+      authorization: pat ? `Bearer ${pat}` : undefined,
+      sessionId,
+      body: {}
+    });
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(rejected.status).toBe(401);
+    expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not expire a session while an authenticated request is running', async () => {
+    vi.useFakeTimers();
+    const pat = 'tmcp_v1_running.secret';
+    const server = createTestServer({ sessionIdleTtlMs: 100 });
+    const initialized = await initialize(server, pat);
+    const sessionId = initialized.headers['mcp-session-id'];
+    let releaseRequest!: () => void;
+    let signalRequestStarted!: () => void;
+    const requestStarted = new Promise<void>((resolve) => {
+      signalRequestStarted = resolve;
+    });
+    const requestPending = new Promise<void>((resolve) => {
+      releaseRequest = resolve;
+    });
+    transportHarness.handlers.push(async (_transport, req, res) => {
+      signalRequestStarted();
+      await requestPending;
+      res.writeHead(200);
+      res.end(JSON.stringify({ method: req.method }));
+    });
+
+    await vi.advanceTimersByTimeAsync(90);
+    const activeResponse = dispatch({ server, method: 'POST', authorization: `Bearer ${pat}`, sessionId, body: {} });
+    await requestStarted;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(transportHarness.instances[0]?.close).not.toHaveBeenCalled();
+
+    releaseRequest();
+    expect((await activeResponse).status).toBe(200);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(transportHarness.instances[0]?.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes every session transport when the Node HTTP server closes', async () => {
+    const server = createTestServer({ maxSessions: 2 });
+    await initialize(server, 'tmcp_v1_first.secret');
+    await initialize(server, 'tmcp_v1_second.secret');
+
+    server.close(() => undefined);
+    await Promise.resolve();
+
+    expect(transportHarness.instances).toHaveLength(2);
+    expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
+    expect(transportHarness.instances[1]?.close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { maxSessions: 0 },
+    { maxSessions: 1.5 },
+    { maxSessions: Number.POSITIVE_INFINITY },
+    { sessionIdleTtlMs: 0 },
+    { sessionIdleTtlMs: Number.NaN },
+    { sessionIdleTtlMs: 2_147_483_648 }
+  ])('rejects invalid lifecycle option overrides: %o', (options) => {
+    expect(() => createMcpHttpServer(options as McpHttpServerOptions)).toThrow(RangeError);
+  });
 });
 
 async function dispatch(options: DispatchOptions): Promise<DispatchResult> {
-  const server = options.server ?? createMcpHttpServer();
+  const server = options.server ?? trackServer(createMcpHttpServer());
   const serializedBody = options.body === undefined ? '' : JSON.stringify(options.body);
   const request = Readable.from(serializedBody ? [serializedBody] : []) as IncomingMessage;
   Object.assign(request, {
@@ -165,6 +406,9 @@ async function dispatch(options: DispatchOptions): Promise<DispatchResult> {
       get headersSent() {
         return headersSent;
       },
+      get statusCode() {
+        return status || 200;
+      },
       end(chunk?: string) {
         if (chunk) body += chunk;
         resolve({ body, headers, status });
@@ -181,14 +425,48 @@ async function dispatch(options: DispatchOptions): Promise<DispatchResult> {
   });
 }
 
-function createTestServer(onAuthContext?: (authContext: RequestAuthContext) => void): ReturnType<typeof createMcpHttpServer> {
-  const options: McpHttpServerOptions = {
+interface TestServerOptions {
+  connect?: (index: number) => Promise<void>;
+  maxSessions?: number;
+  onAuthContext?: (authContext: RequestAuthContext) => void;
+  sessionIdleTtlMs?: number;
+}
+
+function createTestServer(options: TestServerOptions | ((authContext: RequestAuthContext) => void) = {}): ReturnType<typeof createMcpHttpServer> {
+  const normalizedOptions = typeof options === 'function' ? { onAuthContext: options } : options;
+  let serverIndex = 0;
+  const httpOptions = {
     createMcpServer(authContext) {
-      onAuthContext?.(authContext);
-      return { connect: async () => undefined } as never;
-    }
-  };
-  return createMcpHttpServer(options);
+      normalizedOptions.onAuthContext?.(authContext);
+      const index = serverIndex++;
+      let transport: TransportDouble | undefined;
+      return {
+        async close() {
+          await transport?.close();
+        },
+        async connect(nextTransport: TransportDouble) {
+          transport = nextTransport;
+          await normalizedOptions.connect?.(index);
+        }
+      } as never;
+    },
+    maxSessions: normalizedOptions.maxSessions,
+    sessionIdleTtlMs: normalizedOptions.sessionIdleTtlMs
+  } as McpHttpServerOptions;
+  return trackServer(createMcpHttpServer(httpOptions));
+}
+
+function initialize(server: Server, pat: string): Promise<DispatchResult> {
+  return dispatch({ server, method: 'POST', authorization: `Bearer ${pat}`, body: initializeRequest() });
+}
+
+function isInitializeBody(body: unknown): boolean {
+  return typeof body === 'object' && body !== null && (body as { method?: unknown }).method === 'initialize';
+}
+
+function trackServer(server: Server): Server {
+  createdServers.push(server);
+  return server;
 }
 
 function initializeRequest(): object {

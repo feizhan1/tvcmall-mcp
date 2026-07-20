@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createTvcMallClients } from './app/client-factory.js';
 import { registerTvcMallTools } from './app/register-tools.js';
 import type { AuthClient } from './auth/auth-client.js';
+import type { RequestAuthContext } from './auth/request-auth-context.js';
 import type { OrderClient } from './orders/order-client.js';
 import type { PointsClient } from './points/points-client.js';
 import type { ProductClient } from './products/product-client.js';
@@ -13,6 +14,7 @@ import { createDefaultTokenStore } from './storage/token-store.js';
 import { PACKAGE_VERSION } from './version.js';
 
 export interface ServerOptions {
+  authContext?: RequestAuthContext;
   tokenStore?: TokenStore;
   authClient?: AuthClient;
   productClient?: ProductClient;
@@ -33,7 +35,7 @@ export function createTvcMallMcpServer(options: ServerOptions = {}): McpServer {
   const trackingClient = options.trackingClient ?? defaultClients.trackingClient;
   const server = new McpServer({ name: 'tvcmall-mcp', version: PACKAGE_VERSION });
 
-  registerTvcMallTools(server, { tokenStore, authClient, productClient, pointsClient, shippingClient, orderClient, trackingClient });
+  registerTvcMallTools(server, { authContext: options.authContext, tokenStore, authClient, productClient, pointsClient, shippingClient, orderClient, trackingClient });
 
   return server;
 }
