@@ -1,207 +1,151 @@
 # TVCMall Customer MCP v0.1 MVP 范围
 
-本文定义 TVCMall Customer MCP v0.1 的项目定位、能力范围、架构边界、实施阶段、验收标准和主要风险。
+本文定义 TVCMall Customer MCP v0.1 的远程服务定位、能力范围、实施阶段、验收标准和主要风险。认证授权以根目录 `tvcmall-webapi mcp开发接入说明文档.md` 为准。
 
 ## 1. 项目定位
 
-- 项目名称：`TVCMall Customer MCP`
-- 用户对象：TVCMall 客户、采购商、分销商、店铺运营人员
-- 使用方式：客户本地安装 MCP，通过 Claude / Cursor / Codex / 其他 MCP Client 使用
-- 第一版性质：客户侧本地 MCP，默认只读
+- 用户对象：TVCMall 客户、采购商、分销商和店铺运营人员。
+- 使用方式：MCP Client 连接 TVCMall 托管的 HTTPS `/mcp` Streamable HTTP 服务。
+- 认证方式：客户在 MCP Client 配置 TVCMall PAT；每个请求发送 `Authorization: Bearer tmcp_v1_{tokenId}.{secret}`。
+- 第一版性质：远程、多 session、只读 MCP；不要求客户安装 Node.js、npm 包或登录 CLI。
 
 ## 2. 核心场景
 
-- A：选品 / 找货
-- C：订单查询 / 物流跟踪 / 订单导出
+- 选品：关键词搜索、商品详情。
+- 费用预估：按 SKU、数量和目的国家/地区估算未下单商品运费。
+- 订单：订单列表与详情。
+- 履约：单个或批量查询物流，以及已下单订单的运费信息。
+- 客户权益：积分汇总与积分记录。
 
 示例问题：
 
 ```text
 帮我查找 TVCMall 上适合 iPhone 的手机壳
+估算 SKU 100100 发往美国、数量 20 的运费
 查询我最近 10 个订单
-导出上个月已发货订单
 批量查询这些订单的物流状态
 查询订单 V24011000008 的物流和运费
+查看我的积分余额
 ```
 
-## 3. 已确定方案
+## 3. 已确定架构
 
 ```text
-分发方式：npm / npx 本地安装
-运行方式：stdio MCP server
-登录方式：独立 CLI 交互登录
-授权方式：用户名 + 密码换取 access_token / refresh_token
-凭证保存：本地保存 token，不保存密码
-后端支持：TVCMall 新增 MCP 专用登录授权接口
-首批能力：商品查询 + 订单查询 + 物流查询 + 本地订单导出
+MCP Client
+  -> HTTPS /mcp Streamable HTTP + 每请求 Bearer PAT
+Remote TVCMall MCP Server
+  -> PAT 基本格式 / session 指纹 / schema / error mapping
+Existing TVCMall WebApi routes + 同一 Bearer PAT
+  -> WebApi / ApplicationServices / RDS 完成 PAT 与 route-scope 授权
 ```
 
-推荐客户体验：
+关键边界：
 
-```bash
-npx @tvcmall/mcp login
-npx @tvcmall/mcp install claude
-```
+- MCP Server 不接收网站用户名或密码，不实现 OAuth，不配置服务器共享 PAT。
+- MCP Server 不调用独立验证接口、不换 token、不解析用户、scopes 或 expiry。
+- MCP Server 不直连 ApplicationServices 或 RDS，也不新增 MCP 专用业务 route。
+- WebApi 使用 `catalog.read`、`order.read` 和 method + normalized route allowlist 做最终授权。
+- PAT 仅在当前 MCP session 内存中保存；session 删除、关闭、空闲过期或 server close 后清理。
 
-## 4. 总体架构
-
-```text
-客户电脑
-┌──────────────────────────────┐
-│ Claude / Cursor / Codex       │
-│ MCP Client                    │
-└───────────────┬──────────────┘
-                │ stdio / JSON-RPC
-┌───────────────▼──────────────┐
-│ @tvcmall/mcp 本地 MCP Server  │
-│ - 注册 MCP tools              │
-│ - 读取本地 token              │
-│ - 调用 TVCMall MCP API        │
-│ - 本地生成导出文件            │
-└───────────────┬──────────────┘
-                │ HTTPS + Bearer token
-┌───────────────▼──────────────┐
-│ TVCMall MCP API / Gateway     │
-│ - 登录授权                    │
-│ - token refresh               │
-│ - 权限校验                    │
-│ - 商品 / 订单 / 物流 API      │
-│ - 审计 / 限流 / 风控           │
-└───────────────┬──────────────┘
-                │ 内部服务或现有 Open API
-┌───────────────▼──────────────┐
-│ TVCMall 核心业务系统          │
-└──────────────────────────────┘
-```
-
-## 5. v0.1 能力范围
+## 4. v0.1 能力范围
 
 ### 包含
 
-- `tvcmall_auth_status`：检查当前登录状态。
-- `tvcmall_search_products`：搜索商品。
-- `tvcmall_get_product_detail`：查看商品详情。
-- `tvcmall_estimate_shipping`：按商品 SKU、数量和目的地估算未下单商品运费。
-- `tvcmall_list_orders`：查询订单列表。
-- `tvcmall_get_order_detail`：查询订单商品、金额、地址等详情。
-- `tvcmall_get_tracking_info`：查询单个订单物流和订单运费。
-- `tvcmall_batch_get_tracking`：批量查询物流和可用的订单运费信息。
-- `tvcmall_export_orders`：导出订单到本地文件。
+| Tool | 能力 | 限制 |
+| --- | --- | --- |
+| `tvcmall_auth_status` | 报告当前 session 是否配置 PAT | 只返回 `{ configured: boolean }`，不验证 PAT |
+| `tvcmall_search_products` | 搜索商品 | 分页，单页最多 50 条 |
+| `tvcmall_get_product_detail` | 查看商品详情 | 返回摘要和结构化详情 |
+| `tvcmall_estimate_shipping` | 估算未下单商品运费 | SKU、数量最多 1000、两位国家/地区代码 |
+| `tvcmall_list_orders` | 查询订单列表 | 日期/状态筛选，单页最多 50 条 |
+| `tvcmall_get_order_detail` | 查看订单详情 | 地址等 PII 服从后端脱敏 |
+| `tvcmall_get_tracking_info` | 查询单个订单物流和运费 | 订单号必填 |
+| `tvcmall_batch_get_tracking` | 批量查询物流 | 每次最多 50 个订单号 |
+| `tvcmall_get_points` | 查询积分汇总 | 只读 |
+| `tvcmall_list_point_records` | 查询积分记录 | 分页，单页最多 50 条 |
 
 ### 不包含
 
-- `orders:create`
-- `orders:update`
-- `orders:cancel`
-- `payment:create`
-- `address:update`
+- 下单、支付、修改或取消订单。
+- 修改地址、设置运输方式、积分兑换等写操作。
+- 文件生成或下载型能力。
+- 分类导航和未在本期 WebApi allowlist 中启用的接口。
+- PAT 发放、撤销和管理界面；它们属于 TVCMall 后端与运营能力。
 
-第一版不要做下单、支付、改地址、取消订单等写操作。
+## 5. 授权范围
 
-## 6. 订单导出范围
+- `catalog.read`：商品搜索、商品详情、未下单商品运费估算。
+- `order.read`：订单列表、订单详情、物流、已下单订单运费、积分。
 
-- 导出生成本地文件，不在 AI 对话中输出完整订单表。
-- 默认目录：`~/Downloads/tvcmall-exports/`
-- v0.1 优先支持 `xlsx`，可以同时支持 `csv`。
-- 默认最多导出 90 天。
-- 大批量导出必须分页拉取。
-- 导出前后端都要校验 `orders:export` 权限。
-- MCP 对话里只返回文件路径和摘要。
-- 电话、邮箱、地址是否脱敏由后端权限控制。
-- 文件名带时间戳，避免覆盖。
+授权不在 MCP tool 层模拟。目标 WebApi route 未登记、被禁用或 PAT scope 不足时，WebApi 返回 `403`，MCP 映射为 `PERMISSION_DENIED`。
 
-文件名示例：
+## 6. 实施阶段
 
-```text
-tvcmall-orders-20260707-153000.xlsx
-tvcmall-orders-20260707-153000.csv
-```
+### 阶段 0：契约与安全边界
 
-## 7. 实施阶段
+- 以权威接入说明确认 PAT 格式、现有 WebApi routes、scope 与 allowlist。
+- 确认生产域名、TLS 终止、日志脱敏、限流和 PII 策略。
+- 维护 `docs/api-contract.md` 与技术架构图、数据流转图。
 
-### 阶段 0：接口盘点和契约确认
+### 阶段 1：远程 HTTP 与 session
 
-- 确认 TVCMall 现有商品、订单、物流、运费 API 能力。
-- 确认 MCP 专用登录接口字段。
-- 确认 token、scope、过期时间、撤销机制。
-- 输出 OpenAPI / Apifox 文档。
+- 使用 MCP SDK `StreamableHTTPServerTransport` 提供 `POST` / `GET` / `DELETE /mcp`。
+- 初始化时校验 Bearer/PAT 基本格式并创建 session。
+- 使用 SHA-256 指纹绑定 `Mcp-Session-Id`，拒绝在既有 session 替换 PAT。
+- 实现最大 session 数、idle TTL、transport `onclose` 和 server close 清理。
 
-### 阶段 1：后端 MCP Auth
+### 阶段 2：WebApi PAT 透传
 
-- 实现 `/api/mcp/auth/login`。
-- 实现 `/api/mcp/auth/refresh`。
-- 实现 `/api/mcp/auth/logout`。
-- 实现 `/api/mcp/auth/me`。
-- 增加设备记录、审计日志、限流。
+- 强制配置 HTTPS `TVCMALL_WEBAPI_BASE_URL`。
+- 所有真实业务 client 使用 session 中的同一 PAT，只添加一次 `Bearer `。
+- 对接现有商品、订单、物流、运费和积分 routes。
+- 统一映射 WebApi 状态、网络、超时与正文读取错误。
 
-### 阶段 2：本地 MCP 骨架
+### 阶段 3：只读 Tools
 
-- 初始化 npm 包。
-- 实现 `server` stdio MCP。
-- 实现 `login/logout/whoami`。
-- 实现 token 存储和自动 refresh。
-- 实现统一 HTTP client 和错误处理。
+- 对所有输入做 Zod 校验，限制分页、批量和数量。
+- 返回 AI 友好摘要与受控 structured content。
+- 确认 `tvcmall_auth_status` 只有 configured 语义。
+- 验证 tool 层不做本地 scope 决策，最终授权始终由 WebApi 完成。
 
-### 阶段 3：商品工具
+### 阶段 4：集成、部署与灰度
 
-- 实现 `tvcmall_search_products`。
-- 实现 `tvcmall_get_product_detail`。
-- 实现 `tvcmall_estimate_shipping`。
-- 做分页、超时、重试和返回摘要。
+- 使用伪 PAT 和 stub WebApi 完成自动化 HTTP 集成测试。
+- 在受控 staging 使用 secret 注入执行真实 WebApi smoke test。
+- 部署到 TLS 终止层后，关闭 `Authorization` 日志并配置告警。
+- 先对少量 PAT 灰度，观察 401/403/429/5xx、session 容量和延迟。
 
-### 阶段 4：订单和物流工具
-
-- 实现 `tvcmall_list_orders`。
-- 实现 `tvcmall_get_order_detail`。
-- 实现 `tvcmall_get_tracking_info`，并让订单物流和订单运费都通过该工具查询。
-- 实现 `tvcmall_batch_get_tracking`。
-- 加权限校验和 PII 脱敏策略。
-
-### 阶段 5：订单导出
-
-- 实现 `tvcmall_export_orders`。
-- 支持 `xlsx` / `csv`。
-- 默认写入 `~/Downloads/tvcmall-exports/`。
-- 返回文件路径和摘要。
-- 加导出数量、时间范围、权限限制。
-
-### 阶段 6：安装和发布
-
-- 实现 `install claude/cursor/codex`。
-- 完善 README 和客户安装文档。
-- 发布 npm 包。
-- 内部测试后灰度给客户。
-
-## 8. 验收标准
+## 7. 验收标准
 
 MVP 完成标准：
 
-- 客户能通过 `npx @tvcmall/mcp login` 登录。
-- MCP Client 能成功启动 `@tvcmall/mcp server`。
-- 未登录时 tools 返回明确引导。
-- access token 过期后可自动 refresh。
-- 可搜索商品、查看商品详情、估算运费。
-- 可查询订单列表、订单详情、物流和订单运费信息。
-- 可批量查询物流。
-- 可导出订单到本地 `xlsx` / `csv` 文件。
-- 不保存明文密码。
-- 不在 AI 对话里暴露 token。
-- stdout 只输出 MCP 协议内容，日志走 stderr 或日志文件。
-- 后端有审计、限流、权限控制。
+1. MCP Client 仅配置远程 URL 与 PAT 即可完成 `initialize`、`tools/list` 和 `tools/call`。
+2. 缺失、非 Bearer 或基本格式错误的 PAT 返回 `401 AUTH_REQUIRED`，且响应与日志不含 PAT。
+3. 同一 `Mcp-Session-Id` 只能使用初始化时的 PAT；不同 session 不共享认证上下文。
+4. MCP 以相同 PAT 调用现有 WebApi route，不新增专用业务 route，也不访问 ApplicationServices/RDS。
+5. 商品、订单、物流、运费和积分的只读 tools 返回摘要与 schema 约束结果。
+6. `catalog.read` / `order.read` 和 route allowlist 由 WebApi 后端执行；MCP 不在本地推断授权。
+7. WebApi `401` / `403` / `429` / `5xx` 及网络、超时、正文读取失败映射为稳定错误码。
+8. `DELETE /mcp`、transport `onclose`、idle TTL 和 server close 都会释放 session 中的 PAT 与指纹。
+9. `TVCMALL_WEBAPI_BASE_URL` 缺失、非 HTTPS，或带 userinfo/query/fragment 时拒绝启动。
+10. 项目不开放写操作，也不提供文件导出能力。
 
-## 9. 主要风险
+## 8. 主要风险与缓解
 
-- **密码安全风险**：必须通过独立 CLI 隐藏输入，不允许 MCP tool 接收密码。
-- **stdio 协议污染**：server 模式不能打印普通日志到 stdout。
-- **PII 泄露风险**：订单详情、地址、电话、导出文件都需要权限和脱敏策略。
-- **客户安装门槛**：npm/npx 方案要求客户本地有 Node.js，需要安装文档或安装助手。
-- **不同 MCP Client 配置差异**：Claude、Cursor、Codex 的配置路径和格式可能不同，需要分别适配。
-- **现有 Open API 能力不完整**：如果现有 API 不覆盖订单物流或权限隔离，需要后端补 MCP Gateway。
+| 风险 | 缓解 |
+| --- | --- |
+| PAT 泄漏 | 客户端 secret 管理；代理与应用不记录 `Authorization`；错误、tool 输出和 fixtures 禁止出现真实 PAT |
+| session 混淆 | 每 session 独立 transport/Server；PAT SHA-256 指纹绑定；容量和 idle TTL |
+| MCP 误判权限 | MCP 不解析 scopes；所有业务请求交给 WebApi route-scope 授权 |
+| route 配置漂移 | 新 tool 上线前核对 HTTP method、normalized route、scope 与 allowlist enabled 状态 |
+| WebApi 故障被误报认证错误 | 仅 `401` 映射认证；`5xx`、网络、超时和正文读取失败统一映射 `API_UNAVAILABLE` |
+| PII 经 AI 扩散 | 后端先授权与脱敏；tool 只返回任务必要摘要，避免透传完整响应 |
+| 客户端实现差异 | 分别验证主流 MCP Client 的自定义 header、Streamable HTTP 与 session header 支持 |
+| 服务重启丢失 session | session 仅内存是安全要求；客户端收到 `SESSION_NOT_FOUND` 后重新 initialize |
 
-## 10. 建议立即开始的事项
+## 9. 上线前决策
 
-1. 后端先定义 MCP Auth API 契约，尤其是 token、scope、refresh、logout。
-2. 工具侧已初始化 `@tvcmall/mcp` 空壳；下一步接入真实 MCP Auth API。
-3. 并行确认商品、订单、物流、运费接口是否能用 Bearer token 调用；订单级物流和运费统一映射到 `tvcmall_get_tracking_info`。
-4. 先内部发布 npm beta，找 1-2 个测试账号跑完整链路。
-5. 最后再做 `install claude/cursor/codex` 的自动配置命令。
+- 确认生产 MCP URL、WebApi base URL 和 TLS/反向代理拓扑。
+- 确认初始 route allowlist 与 `catalog.read` / `order.read` 的 PAT 发放策略。
+- 确认 session 最大容量、idle TTL、请求超时和限流阈值。
+- 确认日志字段白名单、PAT 泄漏响应流程和 staging smoke test 责任人。

@@ -1,161 +1,123 @@
-# TVCMall 远程 Streamable HTTP MCP 设计
+# TVCMall 远程 Streamable HTTP MCP 最终设计
+
+> 本文最初用于讨论远程化方案，现已按 2026-07-20 确认的 WebApi PAT 契约更新为最终设计。授权细节以仓库根目录 `tvcmall-webapi mcp开发接入说明文档.md` 为准。
 
 ## 目标
 
-将 TVCMall Customer MCP 从客户电脑上的 `stdio` 进程迁移为部署在 TVCMall 基础设施中的远程 Streamable HTTP 服务。MCP Client 通过 TVCMall 提供的 API Key 连接服务，用户不再安装 npm 包、运行 CLI 登录或在本地保存 token。
+将 TVCMall Customer MCP 作为远程 Streamable HTTP 服务部署在 TVCMall 基础设施中。MCP Client 只配置远程 `/mcp` URL 与 TVCMall PAT，不在本机运行服务、登录 CLI 或网站账号密码流程。
 
-## 范围
+本期保留商品、订单、物流、运费和积分只读 tools，不开放写操作，也不提供文件导出能力。
 
-本次迁移保留商品、积分、运费估算、订单、物流和订单导出 tool 的只读业务范围，替换其传输层与身份模型。
+## 最终授权选择
 
-不实现下单、支付、订单修改、地址修改或取消订单等写操作。API Key 的发放、撤销和后台管理界面属于 TVCMall 后端能力，本仓库只定义服务端验证集成点。
+MCP Client 在每个 `/mcp` 请求发送：
 
-## 方案选择
+```http
+Authorization: Bearer tmcp_v1_{tokenId}.{secret}
+```
 
-采用“远程 MCP 服务调用 API Key 验证接口”的方案：
+MCP Server 在 session 内保存原始 PAT，调用现有 TVCMall WebApi route 时原样使用该 PAT，只增加一次 `Bearer `。TVCMall WebApi、ApplicationServices 与 RDS 负责 PAT verifier、`catalog.read` / `order.read` 以及 method + normalized route allowlist。
 
-1. MCP Client 在每个 `/mcp` HTTP 请求携带 `Authorization: Bearer <API_KEY>`。
-2. 远程 MCP 服务在创建会话时调用 TVCMall API Key 验证接口。
-3. 验证接口返回用户、scope 及仅供下游业务 API 调用的短期 token。
-4. MCP 服务把验证结果绑定到该 MCP 会话，并使用短期 token 调用商品、订单、积分、物流和导出 API。
+明确不采用以下模式：
 
-API Key 不写入文件、数据库、token store 或日志。MCP 服务不再使用客户端本地 Keychain 或登录账号密码。
+- MCP 先访问额外认证端点再换取业务 token。
+- 网站用户名密码或 OAuth 登录。
+- MCP 解析 customer、display name、scopes 或 expiry。
+- MCP Server 配置一个所有用户共享的 PAT。
+- MCP 直连 ApplicationServices/RDS，或新增 `/api/mcp/v1/...` 业务 routes。
 
 ## 架构
 
 ```text
 MCP Client
-  |
-  | HTTPS + Authorization: Bearer <API_KEY>
+  | HTTPS /mcp + Bearer tmcp_v1_...
   v
-Remote Streamable HTTP MCP (/mcp)
-  |
-  | POST /api/mcp/auth/verify
-  | Authorization: Bearer <API_KEY>
+Remote Streamable HTTP MCP
+  | PAT 基本格式、session SHA-256 指纹、schema、容量/idle TTL
+  | 同一 Bearer PAT
   v
-TVCMall API Key 验证服务
-  |
-  | customer + scopes + short-lived upstream access token
+Existing TVCMall WebApi routes
+  | ApplicationServices: PAT + scope + route allowlist
   v
-Remote MCP tool execution
-  |
-  | HTTPS + Authorization: Bearer <upstreamAccessToken>
-  v
-TVCMall business APIs
+RDS + existing business actions
 ```
 
-远程服务使用 Node 内置 HTTP 服务和 MCP SDK 的 `StreamableHTTPServerTransport`。每个 MCP session 都拥有独立的 `McpServer`、transport 与认证上下文，避免用户身份在并发请求间共享。
+MCP SDK 使用 `StreamableHTTPServerTransport`。每个 session 都有独立的 `McpServer`、transport 与 PAT 上下文，避免并发请求在全局变量中串用凭据。
 
-服务暴露以下端点：
+## HTTP 与 session
 
-- `POST /mcp`：建立和处理 Streamable HTTP MCP 请求。
-- `GET /mcp`：处理 SDK 支持的流式恢复请求；不支持的请求返回规范的 MCP/HTTP 错误。
+服务暴露：
+
+- `POST /mcp`：initialize 与 MCP JSON-RPC 请求。
+- `GET /mcp`：SDK 支持的流式恢复请求。
 - `DELETE /mcp`：终止 MCP session。
-- `GET /healthz`：只返回服务存活状态，不泄露配置、会话或用户信息。
-- `GET /exports/:exportId`：下载已完成的订单导出文件；要求有效 API Key 且该 Key 所属 customer 与导出归属一致。
+- `GET /healthz`：只返回服务存活状态。
 
-所有 MCP 端点均要求 API Key。服务从 Key 生成仅内存保存的不可日志化指纹，拒绝 API Key 与既有 session 指纹不一致的请求。认证上下文最多缓存至验证响应的 `expiresAt`，过期后重新调用验证接口；会话销毁时立即清除。
+初始化只校验 Bearer/PAT 基本格式与 request schema，不预先调用 WebApi。成功后返回 `Mcp-Session-Id`，并将 PAT 的 SHA-256 指纹绑定到 session。后续请求必须携带该 ID 和同一 PAT；替换 PAT 返回 `401 AUTH_REQUIRED`。
 
-## API Key 验证契约
+原始 PAT 与指纹都只保存在 session 内存。`DELETE`、transport `onclose`、idle TTL、初始化失败与 server close 均关闭 transport/MCP Server 并清理认证上下文。
 
-远程服务通过 `TVCMALL_API_KEY_VERIFY_URL` 调用验证接口：
+## Tool 与 WebApi
 
-```http
-POST /api/mcp/auth/verify HTTP/1.1
-Authorization: Bearer <API_KEY>
-Accept: application/json
-```
+| Tool 范围 | Scope | 现有 WebApi route 示例 |
+| --- | --- | --- |
+| 商品搜索、商品详情、商品运费估算 | `catalog.read` | `/api/v3/product/list/search/mapping`、`/api/v3/productdetail/detail`、`/api/v3/productdetail/shipping/compute` |
+| 订单、物流、积分 | `order.read` | `/api/v3/user/getorders`、`/api/v3/order/detail`、`/api/order/getlogisticstracking`、`/api/v3/user/points/stat` |
 
-成功响应必须为：
+tool 层只做参数校验、业务 client 调用和输出摘要，不读取本地 scope 列表。route 未登记、被禁用或 PAT scope 不足由 WebApi 返回 `403`。
+
+`tvcmall_auth_status` 只返回：
 
 ```json
 {
-  "customer": {
-    "id": "customer_123",
-    "displayName": "TVCMall Buyer"
-  },
-  "scopes": ["products:read", "orders:read", "orders:export"],
-  "upstreamAccessToken": "short-lived-token",
-  "expiresAt": "2026-07-13T12:00:00Z"
+  "configured": true
 }
 ```
 
-约束如下：
+它不返回 PAT、token ID、用户或 scopes，也不声称 WebApi 已验证 PAT。
 
-- `customer.id`、至少一个 scope、`upstreamAccessToken` 与有效的 ISO 8601 `expiresAt` 均为必填字段。
-- 验证接口返回 `401` 或 `403` 时，MCP 服务返回 HTTP `401`，不区分 API Key 不存在、已撤销或无权使用 MCP。
-- 验证接口超时、无效 JSON 或 `5xx` 时，MCP 服务返回 HTTP `503`，并在 tool 层映射为 `API_UNAVAILABLE`；响应不得包含 API Key 或上游原始错误正文。
-- MCP 服务向业务 API 发送 `Authorization: Bearer <upstreamAccessToken>`。短期 token 不返回给 MCP Client，也不写入日志。
+## 错误语义
 
-## Tool 身份与权限
+| 来源 | 稳定错误 |
+| --- | --- |
+| MCP 请求缺少 Bearer PAT 或基本格式错误 | `AUTH_REQUIRED` |
+| session 中替换 PAT | `AUTH_REQUIRED` |
+| WebApi `401` | `AUTH_REQUIRED` |
+| WebApi `403` | `PERMISSION_DENIED` |
+| WebApi `429` | `RATE_LIMITED` |
+| WebApi `5xx`、网络、超时、body read failure | `API_UNAVAILABLE` |
+| Zod 输入错误 | `VALIDATION_ERROR` |
 
-删除 `TokenStore`、`SessionManager` 和 `AuthClient` 对 MCP tool 的运行时依赖，改为不可变的 `RequestAuthContext`：
-
-```ts
-interface RequestAuthContext {
-  customerId: string;
-  displayName: string;
-  scopes: string[];
-  upstreamAccessToken: string;
-  expiresAt: Date;
-}
-```
-
-tool 注册在创建会话时接收该上下文。每个 tool 先检查所需 scope，再调用对应业务 client。`tvcmall_auth_status` 仅返回已连接状态、显示名和 scope，不返回 API Key、短期 token 或过期时间。
-
-缺失 API Key、API Key 无效、scope 不足、业务 API 不可用和输入不合法，分别使用稳定 HTTP/MCP 错误语义：`401`、`401`、`PERMISSION_DENIED`、`API_UNAVAILABLE` 和 `VALIDATION_ERROR`。旧的“请执行 `npx @tvcmall/mcp login`”引导全部删除。
-
-## 订单导出
-
-远程 MCP 不能在客户电脑直接创建文件。`tvcmall_export_orders` 改为在服务端受控目录创建带时间戳且不可覆盖的导出文件，并返回导出数量、格式、筛选摘要、到期时间及下载 URL。
-
-下载 URL 不包含 API Key。调用 `GET /exports/:exportId` 时必须再次携带 `Authorization: Bearer <API_KEY>`；服务重新验证 Key，并验证 customer ID 与导出归属相同。导出记录和文件在配置的 TTL 到期后删除。导出文件路径、完整订单表、API Key 和短期 token 都不能写入 MCP 响应或日志。
+错误响应不得包含 PAT、上游正文、内部 host、用户归属或精确撤销原因。
 
 ## 配置与部署
 
-部署环境提供以下配置：
-
-| 变量 | 含义 |
+| 配置 | 说明 |
 | --- | --- |
-| `TVCMALL_MCP_HOST` | HTTP 监听地址，默认仅绑定部署环境允许的地址。 |
-| `TVCMALL_MCP_PORT` | HTTP 监听端口。 |
-| `TVCMALL_MCP_PATH` | MCP 路径，默认 `/mcp`。 |
-| `TVCMALL_API_KEY_VERIFY_URL` | API Key 验证接口完整 URL。 |
-| `TVCMALL_API_KEY_VERIFY_TIMEOUT_MS` | 验证接口超时。 |
-| `TVCMALL_EXPORT_DIR` | 服务端导出临时目录。 |
-| `TVCMALL_EXPORT_TTL_MS` | 导出文件保留时长。 |
+| `TVCMALL_WEBAPI_BASE_URL` | 必填 HTTPS WebApi 基础 URL；无 userinfo/query/fragment |
+| `TVCMALL_API_TIMEOUT_MS` | WebApi 超时，默认 15000 ms |
+| `TVCMALL_MCP_HOST` | 监听地址，默认 `127.0.0.1` |
+| `TVCMALL_MCP_PORT` | 监听端口，默认 `3000` |
+| `TVCMALL_MCP_PATH` | MCP 路径，默认 `/mcp` |
 
-生产环境必须在 TLS 终止层后部署，并限制对远程服务监听端口的直接访问。反向代理不记录 `Authorization` 请求头；应用日志也必须通过统一脱敏函数过滤该字段及任何 API Key/token 值。
+生产环境部署在 TLS 终止层后。反向代理与应用均不记录 `Authorization`。多副本部署使用 session affinity，不通过共享存储复制 PAT。
 
-MCP Client 配置仅包含远程地址与 API Key：
+## 安全约束
 
-```json
-{
-  "mcpServers": {
-    "tvcmall": {
-      "url": "https://mcp.tvcmall.com/mcp",
-      "headers": {
-        "Authorization": "Bearer ${TVCMALL_API_KEY}"
-      }
-    }
-  }
-}
-```
-
-## 移除项
-
-移除 npm 客户端分发、CLI 的 `server`、`login`、`logout`、`whoami`、`install` 命令，以及本地 Keychain token store、fake auth、refresh 和 `stdio` harness。项目入口改为部署远程服务的运行命令、环境变量和 MCP Client 配置说明。
-
-业务 fake fixtures 可以保留为服务端测试依赖，但它们不再模拟本地登录或 token 持久化。
+- PAT 只能由 MCP Client 提供，只能发送给配置的 TVCMall WebApi。
+- 日志、异常、tracing、MCP tool 输出、fixtures 和测试快照禁止出现真实 PAT。
+- RDS 只保存 PAT 元数据/verifier，不保存明文 secret。
+- 订单、物流和地址等数据服从 WebApi 权限与脱敏策略；MCP 只返回任务必要摘要。
+- session 指纹只用于同 session 比对，不替代 WebApi 授权，也不持久化。
 
 ## 测试与验收
 
-迁移后至少覆盖：
-
-1. 未携带或错误的 API Key 返回 `401`，且响应和日志没有泄露 Key。
-2. 正确 API Key 可执行 `initialize`、`tools/list` 与受授权 `tools/call`。
-3. 不同 API Key 创建的会话不共享 customer、scope 或业务 token；同一 session 的 Key 不可替换。
-4. scope 缺失返回 `PERMISSION_DENIED`；验证接口超时、`5xx` 或无效响应返回安全的 `API_UNAVAILABLE`/`503`。
-5. 下游业务 API 收到短期 `Bearer` token，永不收到原始 API Key。
-6. 导出文件带时间戳且不覆盖；下载必须重新鉴权并校验所属 customer；过期文件不可下载。
-7. 删除 `stdio` 测试，新增真实 Streamable HTTP 协议集成测试，并执行 `npm test`、`npm run typecheck` 和 `npm run build`。
+1. 无 PAT、非 Bearer 或基本格式错误的 initialize 返回 `401 AUTH_REQUIRED`。
+2. 有效格式 PAT 可建立 session 并获得 `Mcp-Session-Id`。
+3. 同一 session 替换 PAT 被拒绝，响应和日志不泄露任一 PAT。
+4. 不同 session 不共享 MCP Server、transport、PAT 或指纹。
+5. 每个 HTTP client 把同一 PAT 发送给现有 WebApi route，且只添加一次 `Bearer `。
+6. WebApi `401`、`403`、`429`、`5xx` 与网络/超时/body read failure 映射稳定。
+7. `tvcmall_auth_status` 只有 configured 状态，tools 不做本地 scope 判断。
+8. `DELETE`、`onclose`、idle TTL 和 server close 均清理 session。
+9. 运行 Streamable HTTP 集成测试、unit tests、typecheck、build 与敏感信息残留检查。

@@ -36,7 +36,7 @@ TVCMall WebApi
 Existing business action
 ```
 
-MCP Server 不调用 `/api/mcp/auth/verify`，不换取 `upstreamAccessToken`，不解析 customer、displayName、scopes 或 expiresAt。原始 PAT 仅保存在当前 MCP session 的内存认证上下文中；session 关闭后清理。日志、错误和 tool 输出均不得包含 PAT。
+MCP Server 不调用任何独立认证端点，不换取短期业务 token，不解析 customer、displayName、scopes 或 expiresAt。原始 PAT 仅保存在当前 MCP session 的内存认证上下文中；session 关闭后清理。日志、错误和 tool 输出均不得包含 PAT。
 
 ## MCP HTTP 会话
 
@@ -80,17 +80,13 @@ route 未登记、route 被禁用或 PAT scope 不足均由 WebApi 返回 `403`�
 
 ## 配置调整
 
-删除独立验证服务相关配置：
-
-- `TVCMALL_API_KEY_VERIFY_URL`
-- `TVCMALL_API_KEY_VERIFY_TIMEOUT_MS`
-- `TVCMALL_ALLOW_INSECURE_API_KEY_VERIFY_URL_FOR_DEVELOPMENT`
+删除独立验证服务的 URL、timeout 和开发环境降级开关等旧配置。
 
 WebApi base URL 使用接入文档命名 `TVCMALL_WEBAPI_BASE_URL`。为避免无提示切换到错误环境，生产部署必须显式配置 HTTPS WebApi URL。MCP Server 不支持服务器级共享 PAT 环境变量；PAT 由每个 MCP Client 在远程 MCP Authorization header 中提供。
 
 ## 删除项
 
-- `HttpApiKeyVerifier` 及其验证响应 schema。
+- 旧 HTTP API Key 验证器及其响应 schema。
 - `InvalidApiKeyError`、验证服务限流/不可用错误类型。
 - `RequestAuthContext` 中的 customer、displayName、scopes、短期 token 和 expiresAt。
 - tool 层本地 scope 检查。

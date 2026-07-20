@@ -1,208 +1,205 @@
 # TVCMall Customer MCP v0.1 API 契约
 
-本文定义 TVCMall Customer MCP v0.1 的本地 CLI、认证接口、token 策略、MCP tools、后端 API、scope、错误码和订单导出契约。
+本文定义远程 Streamable HTTP MCP 的 PAT header、session、MCP tools、现有 TVCMall WebApi routes、scope/allowlist、输出摘要和稳定错误码。WebApi 授权实现以根目录 `tvcmall-webapi mcp开发接入说明文档.md` 为准。
 
-## 1. 设计原则
+## 1. 契约原则
 
-- MCP server 只使用已保存 token，不直接接收密码。
-- 登录、登出、查看当前账号等交互动作通过独立 CLI 完成。
-- MCP stdio 通道只承载 JSON-RPC 协议内容，不能被普通日志污染。
-- 后端返回的大对象需要在本地 MCP server 中整理为 AI 友好摘要。
-- 所有涉及订单、物流、运费、导出的接口都要考虑权限、审计、限流和 PII 脱敏。
-- 订单号场景下的物流和运费都通过 `tvcmall_get_tracking_info` 承载，避免 MCP Client 把订单运费误路由到订单详情或商品运费预估工具。
+- MCP Client 在每个 `/mcp` 请求发送 `Authorization: Bearer tmcp_v1_{tokenId}.{secret}`。
+- MCP HTTP 层只校验 Bearer/PAT 基本格式、请求 schema、session 指纹、容量与 idle TTL。
+- MCP 不向其他认证服务预验证 PAT、不换 token、不解析用户、scopes 或 expiry。
+- MCP 调用业务接口时使用当前 session 的同一 PAT，只添加一次 `Bearer `。
+- TVCMall WebApi → ApplicationServices → RDS 是唯一业务授权链，负责 PAT verifier、`catalog.read` / `order.read` 和 method + normalized route allowlist。
+- MCP 不直连 ApplicationServices/RDS，不新增 `/api/mcp/v1/...` 业务 routes，不使用网站用户名密码、OAuth 或服务器共享 PAT。
+- v0.1 只读，不提供文件导出能力，不开放改变 TVCMall 业务状态的接口。
 
-## 2. 本地 CLI 命令
+## 2. Streamable HTTP 接口
 
-```bash
-npx @tvcmall/mcp login
-npx @tvcmall/mcp logout
-npx @tvcmall/mcp whoami
-npx @tvcmall/mcp server
-npx @tvcmall/mcp install claude
-npx @tvcmall/mcp install cursor
-npx @tvcmall/mcp install codex
-```
+### 2.1 Endpoints
 
-命令职责：
-
-- `login`：默认使用本地假数据保存 fake token session；设置 `TVCMALL_DATA_SOURCE=real` 后，使用 `--email` 和隐藏密码输入调用真实 `POST /user/login`，并保存真实 token。
-- `logout`：当前实现先调用 fake logout，再清除本地 token；后续替换为调用后端 logout 失效当前 refresh token。
-- `whoami`：展示当前登录账号、客户 ID、权限范围，不展示 token；如果 session 过期，当前 fake 实现会自动 refresh。
-- `server`：启动 MCP stdio server，供 MCP Client 调用。
-- `install claude/cursor/codex`：自动写入对应 MCP Client 配置，降低客户安装成本。
-
-MCP Client 配置示例：
-
-```json
-{
-  "mcpServers": {
-    "tvcmall": {
-      "command": "npx",
-      "args": ["-y", "@tvcmall/mcp", "server"]
-    }
-  }
-}
-```
-
-## 3. 为什么 server 模式不接收密码
-
-不要在 `server` 模式里做交互式密码输入。MCP stdio 通道要用于 JSON-RPC 协议，如果 server 启动后在 `stdin/stdout` 上打印 `请输入密码`，很容易破坏 MCP 协议流。
-
-正确做法：
-
-```bash
-npx @tvcmall/mcp login
-```
-
-这个命令是独立 CLI，不是 MCP server。默认开发模式使用假数据保存 fake token session，并提供 fake refresh/logout/me 打通本地链路；设置 `TVCMALL_DATA_SOURCE=real` 后，它会调用真实 `/user/login`，并在未提供 `--password` 时隐藏读取密码。登录完成后，MCP server 再读取本地 token。
-
-## 4. 后端认证接口
-
-当前外部登录文档见 `docs/external/登录.openapi.yaml`，其中已定义真实登录入口：
-
-```http
-POST /user/login
-Authorization: <login-api-authorization>
-Content-Type: application/json
-```
-
-refresh、logout、me 仍建议后续补充 MCP 专用授权接口：
-
-```http
-POST /api/mcp/auth/refresh
-POST /api/mcp/auth/logout
-GET  /api/mcp/auth/me
-```
-
-### POST /user/login
-
-请求：
-
-```json
-{
-  "email": "customer@example.com",
-  "password": "********",
-  "rememberme": true
-}
-```
-
-响应：
-
-当前登录 OpenAPI 未给出明确响应字段。`HttpAuthClient` 会兼容常见 token 形态，例如 `data.token`、`data.access_token` 或顶层 `token` / `access_token`，并映射为本地 `StoredAuthSession`：
-
-```json
-{
-  "data": {
-    "token": "<access_token>",
-    "refresh_token": "<refresh_token>",
-    "expires_in": 7200,
-    "user": {
-      "customer_id": "cus_123",
-      "email": "customer@example.com",
-      "name": "Customer Name"
-    },
-    "scopes": ["products:read", "orders:read"]
-  }
-}
-```
-
-### Token 策略
-
-- `access_token`：短期有效，例如 1-2 小时。
-- `refresh_token`：长期但可撤销，例如 30-90 天。
-- 后端支持设备级撤销。
-- 每次 refresh 可以轮换 refresh token。
-- 失败登录需要限流和风控。
-
-## 5. 本地凭证存储
-
-优先级：
-
-1. 系统凭证库：macOS Keychain、Windows Credential Manager、Linux Secret Service。当前本地实现使用 `keytar` 适配系统凭证库。
-2. 如果系统凭证库不可用，当前实现安全降级为未登录状态；本地加密文件 fallback 需要单独评审密钥管理方案。
-3. 不允许保存明文密码。
-4. 不允许把 token 打印到 stdout。
-5. 日志中必须脱敏 token、用户名、地址、电话等敏感信息。
-
-本地配置建议：
-
-```text
-~/.config/tvcmall-mcp/config.json
-~/.config/tvcmall-mcp/logs/
-~/Downloads/tvcmall-exports/
-```
-
-其中 token 不建议直接放 `config.json`，应放系统凭证库。
-
-### 运行时环境变量
-
-真实 HTTP API client 接入后，运行时配置由 `src/config/runtime-config.ts` 统一读取，MCP tools 和领域 client 不应直接散落读取 `process.env`。
-
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `TVCMALL_API_BASE_URL` | `https://api.tvcmall.com` | TVCMall HTTP API base URL |
-| `TVCMALL_API_TIMEOUT_MS` | `15000` | HTTP 请求超时时间，单位毫秒；无效值回退默认值 |
-| `TVCMALL_API_ENV` | `production` | API 环境：`production`、`staging`、`sandbox`；无效值回退默认值 |
-| `TVCMALL_DATA_SOURCE` | `fake` | 数据源：`fake` 使用本地 fixtures，`real` 使用真实 HTTP API；无效值回退默认值 |
-| `TVCMALL_API_AUTHORIZATION` | 未设置 | `/user/login` 所需的 `Authorization` header；如属于敏感部署凭据，不应提交到仓库 |
-| `TVCMALL_LOG_LEVEL` | `info` | 日志级别：`silent`、`error`、`warn`、`info`、`debug`；无效值回退默认值 |
-| `TVCMALL_EXPORT_DIR` | 未设置 | 默认订单导出目录；为空时由导出逻辑自行选择安全默认目录 |
-
-环境变量只用于非敏感运行时配置；`access_token`、`refresh_token`、密码、完整地址、电话、邮箱等敏感信息不应放入环境变量、`config.json` 或日志。除 `/user/login` 使用 `TVCMALL_API_AUTHORIZATION` 外，真实 HTTP client 必须从已保存的 `StoredAuthSession.accessToken` 设置请求头 `Authorization`。
-
-## 6. 真实 HTTP API 映射
-
-`TVCMALL_DATA_SOURCE=real` 时，当前已接入以下真实 endpoint；未列出的能力继续使用 fake client 或后续补充真实 API 文档。
-
-| MCP 能力 | 外部 API | 请求方式 | 鉴权 |
+| Method | Path | 用途 | 认证/session 要求 |
 | --- | --- | --- | --- |
-| 登录 | `/user/login` | `POST` JSON body | `Authorization` 来自 `TVCMALL_API_AUTHORIZATION` |
-| 商品搜索 | `/v3/product/list/search/mapping` | `GET` query `body` JSON string | `Authorization` 来自 `session.accessToken` |
-| 商品详情 | `/v3/productdetail/detail` | `GET` query `body` JSON string | `Authorization` 来自 `session.accessToken` |
-| 商品 SKU 目的地运费估算 | `/v3/productdetail/shipping/compute` | `GET` query `body` JSON string `{sku,quantity,countrycode}` | `Authorization` 来自 `session.accessToken` |
-| 订单列表 | `/v3/user/getorders` | `POST` JSON body | `Authorization` 来自 `session.accessToken` |
-| 订单详情 | `/v3/order/detail` | `POST` query `orderId` | `Authorization` 来自 `session.accessToken` |
-| 客户积分 | `/v3/user/points/stat` | `GET` | `Authorization` 来自 `session.accessToken` |
-| 积分记录 | `/v3/user/points/list` | `GET` query `pageindex/pagesize` | `Authorization` 来自 `session.accessToken` |
-| 物流和订单运费 | `/order/getlogisticstracking` | `GET` query `orderId` | `Authorization` 来自 `session.accessToken` |
+| `POST` | `/mcp` | `initialize`、`tools/list`、`tools/call` 等 MCP JSON-RPC | 每请求 Bearer PAT；初始化后还需 `Mcp-Session-Id` |
+| `GET` | `/mcp` | SDK 支持的流式恢复/SSE | Bearer PAT + `Mcp-Session-Id` |
+| `DELETE` | `/mcp` | 终止 session | Bearer PAT + `Mcp-Session-Id` |
+| `GET` | `/healthz` | 存活检查 | 不返回配置、session 或身份信息 |
 
-## 7. MCP Tools
+除 `/healthz` 外，所有 `/mcp` 请求都必须携带 PAT。没有 session ID 的非 initialize 请求返回安全的 session/initialize 错误，不创建隐式 session。
 
-登录相关不要做成接收密码的 MCP tool。MCP tools 只使用已保存 token。
+### 2.2 Authorization header
 
-### v0.1 tools 列表
-
-```text
-tvcmall_auth_status
-tvcmall_search_products
-tvcmall_get_product_detail
-tvcmall_estimate_shipping
-tvcmall_get_points
-tvcmall_list_point_records
-tvcmall_list_orders
-tvcmall_get_order_detail
-tvcmall_get_tracking_info
-tvcmall_batch_get_tracking
-tvcmall_export_orders
+```http
+Authorization: Bearer tmcp_v1_{tokenId}.{secret}
 ```
 
-### tvcmall_auth_status
+要求：
+
+- scheme 必须是 `Bearer`。
+- token 必须以 `tmcp_v1_` 开头，并包含非空 `{tokenId}` 与 `{secret}` 两段。
+- token 不能包含空白，不能是网站登录 token。
+- 基本格式通过只代表请求可建立 MCP session，不代表 PAT 已被 WebApi 验证。
+- 客户端必须在后续 `POST`、`GET`、`DELETE` 请求重复发送同一 PAT。
+
+### 2.3 内容协商
+
+典型请求头：
+
+```http
+Content-Type: application/json
+Accept: application/json, text/event-stream
+```
+
+JSON-RPC 正文必须符合 MCP SDK 当前协商的 protocol version 与 schema。非法 JSON、超限正文或 schema 错误不得触发业务调用。
+
+## 3. Session 契约
+
+### 3.1 创建
+
+1. 客户端发送无 `Mcp-Session-Id` 的 `POST /mcp initialize` 与 PAT。
+2. MCP 校验 header 与 initialize schema，为 PAT 生成 SHA-256 指纹。
+3. MCP 创建独立 `McpServer`、`StreamableHTTPServerTransport` 和 session 内存认证上下文。
+4. 成功响应 header 返回 `Mcp-Session-Id`。
+
+初始化不调用 WebApi。原始 PAT 与指纹都不得写入日志或持久层。
+
+### 3.2 后续请求
+
+```http
+Mcp-Session-Id: {session-id}
+Authorization: Bearer tmcp_v1_{tokenId}.{secret}
+```
+
+- session ID 必须存在，PAT 的 SHA-256 指纹必须与初始化时一致。
+- 指纹不一致返回 `401 AUTH_REQUIRED`，不说明 session 归属。
+- 未知或已清理 session 返回 `404 SESSION_NOT_FOUND`。
+- active request 结束后刷新 idle TTL；active request 期间不得被空闲清理。
+- 最大 session 数必须同时计入已建立 session 和并发初始化，避免容量竞态。
+
+### 3.3 清理
+
+以下事件都必须关闭 transport/MCP Server 并删除 session 中的原始 PAT、指纹与引用：
+
+- 客户端成功 `DELETE /mcp`。
+- transport `onclose`。
+- idle TTL 到期。
+- initialize 失败或初始化响应未成功建立 session。
+- server close / 进程优雅退出。
+
+session 不跨进程恢复。多副本部署需使用 session affinity；实例丢失后客户端重新 initialize。
+
+## 4. PAT 透传与 WebApi 授权
+
+### 4.1 下游请求
+
+MCP Server 从当前 session 读取原始 PAT，并调用 `TVCMALL_WEBAPI_BASE_URL` 下的现有 route：
+
+```http
+Authorization: Bearer tmcp_v1_{tokenId}.{secret}
+Accept: application/json
+```
+
+MCP 必须防止 `Bearer Bearer ...`，不得把 PAT 发送到日志、redirect 目标、第三方服务、ApplicationServices 地址或 RDS。
+
+### 4.2 WebApi 授权链
+
+1. WebApi 认证过滤器优先识别 `tmcp_v1_` PAT。
+2. WebApi 调用 ApplicationServices 校验 PAT 与当前 HTTP method、URL。
+3. ApplicationServices 从 RDS 查询 PAT 元数据/verifier/scopes 和 route-scope allowlist。
+4. 授权成功后 WebApi 建立请求用户上下文、移除 `Authorization`，再执行原有业务 action。
+5. 授权失败不进入业务 action，WebApi 返回 `401` 或 `403`。
+
+RDS 不保存 PAT 明文 secret。MCP 既不保存 verifier，也不能绕过此链路。
+
+### 4.3 Scope 与 route normalization
+
+```text
+UPPERCASE_HTTP_METHOD + normalized_route -> required_scope
+```
+
+`normalized_route` 规则：
+
+- 绝对 URL 只保留 path。
+- 去掉 query string。
+- 去掉首尾 `/`。
+- path 转为小写。
+
+示例：
+
+| 原始请求 | 授权匹配键 |
+| --- | --- |
+| `GET https://webapi.example.com/api/v3/product/list/search/mapping?keywords=iphone` | `GET + api/v3/product/list/search/mapping` |
+| `POST /api/v3/user/getorders` | `POST + api/v3/user/getorders` |
+| `GET /api/order/getlogisticstracking?orderId=123` | `GET + api/order/getlogisticstracking` |
+
+route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MCP 本地 tool 是否存在不影响授权结果。
+
+## 5. 本期 WebApi route allowlist
+
+以下表来自权威接入说明。V3 route 优先；物流当前无 V3，复用现有旧 route。
+
+### 5.1 `catalog.read`
+
+| Method | normalized_route | 用途 |
+| --- | --- | --- |
+| `POST` | `api/v3/product/list/search/image/mapping` | PC 以图搜图 |
+| `POST` | `api/m/v3/product/list/search/image/mapping` | Mobile 以图搜图 |
+| `GET` | `api/v3/product/list/search/mapping` | PC 关键词搜索 |
+| `GET` | `api/m/v3/product/list/search/mapping` | Mobile 关键词搜索 |
+| `GET` | `api/v3/productdetail/detail` | PC 商品详情 |
+| `GET` | `api/m/v3/productdetail/detail` | Mobile 商品详情 |
+| `GET` | `api/v3/productdetail/shipping/compute` | PC 运费试算 |
+| `GET` | `api/m/v3/productdetail/shipping/compute` | Mobile 运费试算 |
+
+### 5.2 `order.read`
+
+| Method | normalized_route | 用途 |
+| --- | --- | --- |
+| `POST` | `api/v3/user/getorders` | PC 订单列表 |
+| `POST` | `api/m/v3/user/getorders` | Mobile 订单列表 |
+| `POST` | `api/v3/order/detail` | PC 订单详情 |
+| `POST` | `api/m/v3/order/detail` | Mobile 订单详情 |
+| `POST` | `api/v3/order/detail/page` | PC 订单商品分页 |
+| `POST` | `api/m/v3/order/detail/page` | Mobile 订单商品分页 |
+| `GET` | `api/order/getlogisticstracking` | PC 订单物流；无 V3 |
+| `GET` | `api/m/order/getlogisticstracking` | Mobile 订单物流；无 V3 |
+| `GET` | `api/v3/user/points/stat` | PC 积分汇总 |
+| `GET` | `api/m/v3/user/points/stat` | Mobile 积分汇总 |
+| `GET` | `api/v3/user/balance/list` | PC 余额流水 |
+| `GET` | `api/m/v3/user/balance/list` | Mobile 余额流水 |
+
+当前 tool 实现的积分记录 client 使用 `GET /api/v3/user/points/list`。该 tool 投产前必须由 WebApi/ApplicationServices 团队确认该 method + normalized route 已登记到 `order.read` allowlist；未登记时应保持 `403 PERMISSION_DENIED`，不得由 MCP 绕过。
+
+新增或修改 tool 前必须同时核对 route、method、请求/响应 schema、scope 与 allowlist enabled 状态。
+
+## 6. MCP Tools
+
+### 6.1 总览
+
+| Tool | 输入摘要 | 输出摘要 | Scope / route |
+| --- | --- | --- | --- |
+| `tvcmall_auth_status` | `{}` | `{ configured: boolean }` | 不调用 WebApi |
+| `tvcmall_search_products` | `query`、`page=1`、`page_size=20`（最大 50） | 查询词、分页、总数、商品摘要列表 | `catalog.read`；商品搜索 route |
+| `tvcmall_get_product_detail` | `product_id` | SKU、标题、价格、库存、MOQ、尺寸、属性、图片 | `catalog.read`；商品详情 route |
+| `tvcmall_estimate_shipping` | `sku`、`quantity`（1..1000）、两位 `countrycode` | 目的地、计费重量、币种、运输方案摘要 | `catalog.read`；运费试算 route |
+| `tvcmall_list_orders` | 可选日期/状态、`page=1`、`page_size=20`（最大 50） | 分页、总数、订单号/状态/金额摘要 | `order.read`；订单列表 route |
+| `tvcmall_get_order_detail` | `order_id` | 商品、金额和后端脱敏后的收货信息 | `order.read`；订单详情 route |
+| `tvcmall_get_tracking_info` | `order_id` | 承运商、单号、状态、事件和可用的订单运费 | `order.read`；物流 route |
+| `tvcmall_batch_get_tracking` | `order_ids`（1..50） | 命中数量和物流摘要列表 | `order.read`；逐个调用物流 route |
+| `tvcmall_get_points` | `{}` | 可用/待生效/累计获得/累计使用积分 | `order.read`；积分汇总 route |
+| `tvcmall_list_point_records` | `page=1`、`page_size=20`（最大 50） | 分页、总数和积分记录摘要 | `order.read`；积分记录 route，投产前确认 allowlist |
+
+### 6.2 `tvcmall_auth_status`
+
+输出只能是：
 
 ```json
 {
-  "description": "检查当前 TVCMall MCP 是否已登录",
-  "input": {},
-  "output": {
-    "logged_in": true,
-    "customer_email": "customer@example.com",
-    "scopes": ["products:read", "orders:read"]
-  }
+  "configured": true
 }
 ```
 
-### tvcmall_search_products
+`configured=true` 仅表示当前 session 内存中存在基本格式正确的 PAT；它不能表达用户身份、scopes、expiry 或 WebApi 验证结果。禁止添加 PAT、token ID、display name 或 scope 列表。
 
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED` 引导。`fake` 模式使用本地假商品数据，`real` 模式调用真实 `/v3/product/list/search/mapping`。
+### 6.3 商品输入
 
 ```json
 {
@@ -212,138 +209,43 @@ tvcmall_export_orders
 }
 ```
 
-返回应是 AI 友好的摘要，不要直接暴露过大的原始 API 响应。当前结构化输出包含 `query`、`page`、`page_size`、`total`、`items`。
-
-### tvcmall_get_product_detail
-
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。`fake` 模式使用本地假商品详情数据，`real` 模式调用真实 `/v3/productdetail/detail`。
+商品详情：
 
 ```json
 {
-  "product_id": "prd_iphone_case_001"
+  "product_id": "123456"
 }
 ```
 
-结构化输出包含商品摘要、MOQ、重量、尺寸、属性和图片 URL。
+结果包含面向 AI 的短文本摘要和 `structuredContent`。搜索无结果时返回空 items 与明确摘要；单个商品不存在可返回稳定的 `PRODUCT_NOT_FOUND`，不得回显 WebApi 原始正文。
 
-### tvcmall_estimate_shipping
-
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。本 tool 面向“未下单商品 SKU + 目的国家/地区代码”的运费预估，入参与真实 `/v3/productdetail/shipping/compute` 对齐为 `sku`、`quantity`、`countrycode`；`real` 模式请求 query `body` 为 JSON string：`{ "sku": "...", "quantity": 1, "countrycode": "AO" }`。它不作为订单号运费入口；如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，MCP Client 必须调用 `tvcmall_get_tracking_info`。
+### 6.4 运费输入
 
 ```json
 {
-  "sku": "684000085E",
-  "quantity": 1,
-  "countrycode": "AO"
+  "sku": "100100",
+  "quantity": 20,
+  "countrycode": "US"
 }
 ```
 
-当前真实接口按单个商品 sku 估算。结构化输出包含目的国家/地区代码、国家/地区名称、币种、重量、商品数量和多个运输选项。真实 `/v3/productdetail/shipping/compute` 返回的 `ShippingMethods`、`Currency`、`DisplayWeight`、`DisplayVolumeWeight`、`Weight`、`VolumeWeight`、`ParamCountryCode`、`ClientCountryCode`、`GrossWeight`、`GrossVolumeWeight` 等字段会映射为 snake_case 白名单字段；不会原样透出完整后端响应。
+`countrycode` 规范化为大写。该 tool 只用于未下单商品；用户提供订单号询问运费时应使用 `tvcmall_get_tracking_info`。
+
+### 6.5 订单输入
 
 ```json
 {
-  "destination_country": "AO",
-  "country_name": "Angola",
-  "currency": "USD",
-  "currency_details": {
-    "code": "USD",
-    "name": "USD",
-    "format_string": "${0:N2}",
-    "format2_string": "USD{0:0.00}",
-    "format3_string": "USD-${0:0.00}",
-    "symbol": "$ - USD",
-    "symbol2": "USD",
-    "symbol3": "USD - $"
-  },
-  "chargeable_weight_kg": 0.017,
-  "display_weight": 0.017,
-  "display_volume_weight": 0.052,
-  "weight": 0.015,
-  "volume_weight": 0.047,
-  "item_count": 1,
-  "param_country_code": "AO",
-  "client_country_code": "AO",
-  "gross_weight": 0,
-  "gross_volume_weight": 0,
-  "options": [
-    {
-      "carrier": "China Post",
-      "service": "China Post",
-      "estimated_cost": 3.54,
-      "currency": "USD",
-      "estimated_days": "15-35 business days",
-      "shipping_method": "China Post",
-      "shipping_method_code": "CNP",
-      "shipping_method_name": "China Post",
-      "shipping_agent_id": 66,
-      "selected": true,
-      "shipping_cost": 3.54,
-      "shipping_cost_format": "$3.54",
-      "delivery_cycle": "15-35 business days",
-      "compute_weight": 0.0447046875,
-      "freight_fee": 0,
-      "freight_fee_format": "$0.00",
-      "logo": "/images/shippingmethods/CNP.jpg",
-      "shipping_type": 1,
-      "mobile_img_host": null,
-      "tariff": 0,
-      "original_shipping_cost": 3.54,
-      "original_shipping_cost_format": "$3.54"
-    }
-  ]
-}
-```
-
-### tvcmall_get_points
-
-当前实现可在 `TVCMALL_DATA_SOURCE=fake` 下返回本地积分假数据；`real` 模式下调用真实 `GET /v3/user/points/stat`，请求头 `Authorization` 使用登录后保存的 access token。
-
-```json
-{}
-```
-
-结构化输出包含 `available_points`、`pending_points`、`total_earned`、`total_used`。
-
-### tvcmall_list_point_records
-
-当前实现可在 `TVCMALL_DATA_SOURCE=fake` 下返回本地积分记录假数据；`real` 模式下调用真实 `GET /v3/user/points/list`，请求头 `Authorization` 使用登录后保存的 access token。
-
-```json
-{
-  "page": 1,
-  "page_size": 20
-}
-```
-
-结构化输出包含分页信息和积分记录列表。
-
-### tvcmall_list_orders
-
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。`fake` 模式使用本地假订单数据，`real` 模式调用真实 `/v3/user/getorders`。
-
-```json
-{
-  "start_date": "2026-06-01",
-  "end_date": "2026-06-30",
+  "start_date": "2026-07-01",
+  "end_date": "2026-07-20",
   "status": "shipped",
   "page": 1,
   "page_size": 20
 }
 ```
 
-### tvcmall_get_order_detail
+`status` 可为 `pending`、`processing`、`shipped`、`delivered`、`cancelled`。日期格式与后端最终约束需保持一致；无筛选时不得隐式扩大到无限分页。
 
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，找不到订单返回 `ORDER_NOT_FOUND`。本 tool 用于订单商品、金额、地址等详情；订单物流和订单运费查询请使用 `tvcmall_get_tracking_info`。
-
-```json
-{
-  "order_id": "V10001"
-}
-```
-
-### tvcmall_get_tracking_info
-
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，找不到物流返回 `TRACKING_NOT_FOUND`。`fake` 模式使用本地物流 fixtures，`real` 模式调用真实 `/order/getlogisticstracking`。当用户询问订单物流、物流轨迹、订单运费、shipping fee、freight 或 delivery cost 时，优先使用本 tool。
+订单详情：
 
 ```json
 {
@@ -351,170 +253,101 @@ tvcmall_export_orders
 }
 ```
 
-结构化输出包含物流承运商、运单号、轨迹事件，并在真实接口返回运费字段时包含可选 `shipping`：
+地址、邮编、电话等字段必须经过 WebApi 权限/脱敏后才能进入结构化结果；tool 不应恢复或推断被掩码的数据。
+
+### 6.6 物流输入
+
+单个订单：
 
 ```json
 {
-  "order_id": "V24011000008",
-  "carrier": "dhl",
-  "tracking_number": "YT2430621266059602",
-  "status": "delivered",
-  "shipping": {
-    "carrier": "dhl",
-    "service": "Logistics Tracking",
-    "estimated_cost": 18.6,
-    "currency": "USD",
-    "estimated_days": "7-12 days",
-    "chargeable_weight_kg": 1.2
-  },
-  "events": []
+  "order_id": "V24011000008"
 }
 ```
 
-### tvcmall_batch_get_tracking
-
-当前实现要求已有登录 session；未登录时返回 `AUTH_REQUIRED`，单次最多 50 个订单。批量输出同样可以包含每个订单的可选 `shipping`。单个订单物流或运费优先使用 `tvcmall_get_tracking_info`。
+批量：
 
 ```json
 {
-  "order_ids": ["V123", "V456", "V789"]
+  "order_ids": ["V24011000008", "V24011000009"]
 }
 ```
 
-建议限制：
+批量 tool 最多接收 50 个订单号。实现可以并行或逐个调用现有物流 route，但必须服从 WebApi 限流并避免在错误中回显 PAT 或完整 PII。
 
-```text
-单次最多 50 个订单
-超过数量要求用户分批或使用导出
-```
+### 6.7 积分输入
 
-### tvcmall_export_orders
-
-当前实现使用本地假订单数据导出 CSV 文件，要求已有登录 session；未登录时返回 `AUTH_REQUIRED`。`xlsx` 目前返回 `EXPORT_FORMAT_UNSUPPORTED`，后续再接入真实 xlsx exporter。
+积分汇总无参数。积分记录使用：
 
 ```json
 {
-  "start_date": "2026-06-01",
-  "end_date": "2026-06-30",
-  "status": "shipped",
-  "format": "xlsx"
+  "page": 1,
+  "page_size": 20
 }
 ```
 
-响应：
+积分 tool 只读；积分兑换、转余额或其他写操作不在 v0.1 范围。
 
-```json
-{
-  "file_path": "~/Downloads/tvcmall-exports/tvcmall-orders-20260707-153000.xlsx",
-  "order_count": 238,
-  "format": "xlsx",
-  "date_range": {
-    "start_date": "2026-06-01",
-    "end_date": "2026-06-30"
-  }
-}
-```
+## 7. 输出约束
 
-## 7. 订单导出契约
+- 每个成功 tool 同时提供简短 `content` 文本和符合 output schema 的 `structuredContent`。
+- 分页响应包含 page、page_size、total 和当前页 items；不自动抓取无限页。
+- 不原样透传大型 WebApi JSON、HTML 错误页或响应 headers。
+- 不返回 PAT、PAT 指纹、WebApi `Authorization`、内部 verifier、数据库字段或完整错误正文。
+- PII 只保留完成用户任务所必需且已被后端允许/脱敏的字段。
+- `tvcmall_auth_status` 是唯一不调用 WebApi 的认证提示 tool，且只返回 configured。
 
-已确定：订单导出生成本地文件，不在 AI 对话中输出完整订单表。
+## 8. 错误契约
 
-默认目录：
+### 8.1 稳定映射
 
-```text
-~/Downloads/tvcmall-exports/
-```
+| 来源 | HTTP / MCP 结果 | 稳定错误码 | 客户端提示 |
+| --- | --- | --- | --- |
+| 缺少 Bearer PAT、PAT 基本格式错误 | HTTP `401` | `AUTH_REQUIRED` | 重新配置 PAT |
+| WebApi `401` | tool error | `AUTH_REQUIRED` | PAT 可能无效、过期、撤销或暂不可验证 |
+| WebApi `403` | tool error | `PERMISSION_DENIED` | 检查 scope、route 登记与 enabled 状态 |
+| WebApi `429` | tool error | `RATE_LIMITED` | 稍后重试；只使用安全重试提示 |
+| WebApi `5xx` | tool error | `API_UNAVAILABLE` | WebApi 暂不可用 |
+| 网络错误、超时、body read failure | tool error | `API_UNAVAILABLE` | 稍后重试，不归因于 PAT |
+| 输入 schema 不合法 | tool error | `VALIDATION_ERROR` | 返回安全字段/约束摘要 |
+| session ID 不存在或已清理 | HTTP `404` | `SESSION_NOT_FOUND` | 重新 initialize |
+| session PAT 指纹不一致 | HTTP `401` | `AUTH_REQUIRED` | 不暴露 session 归属 |
+| session 达到容量上限 | HTTP `503` | `SESSION_CAPACITY_REACHED` | 稍后重新 initialize |
 
-支持格式：
+WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/scope 授权问题。WebApi `5xx`、网络、超时或正文读取失败不可映射成认证错误。
 
-```text
-当前 fake 实现：csv
-后续 v0.1 完整实现：xlsx 优先，csv 可同时支持
-```
+### 8.2 安全错误正文
 
-安全限制：
+错误响应和 tool 文本允许包含稳定错误码与操作建议，但不得包含：
 
-- 默认最多导出 90 天。
-- 大批量导出必须分页拉取。
-- 导出前后端做权限校验：`orders:export`。
-- MCP 对话里只返回文件路径和摘要。
-- 电话、邮箱、地址是否脱敏由后端权限控制。
-- 文件名带时间戳，避免覆盖。
+- `Authorization` header 或 PAT 的任意完整片段。
+- WebApi 原始 response body、堆栈、内部 host 或数据库信息。
+- PAT 是否存在于 RDS、归属用户、精确过期/撤销原因。
+- 其他 session ID 或 session 数量明细。
 
-文件名示例：
+## 9. 运行时配置契约
 
-```text
-tvcmall-orders-20260707-153000.xlsx
-tvcmall-orders-20260707-153000.csv
-```
+| 变量 | 必填 | 默认值 | 校验 |
+| --- | --- | --- | --- |
+| `TVCMALL_WEBAPI_BASE_URL` | 是 | 无 | HTTPS；无 userinfo/query/fragment |
+| `TVCMALL_API_TIMEOUT_MS` | 否 | `15000` | 正整数，毫秒 |
+| `TVCMALL_API_ENV` | 否 | `production` | `production` / `staging` / `sandbox` |
+| `TVCMALL_MCP_HOST` | 否 | `127.0.0.1` | 非空字符串 |
+| `TVCMALL_MCP_PORT` | 否 | `3000` | 正整数 |
+| `TVCMALL_MCP_PATH` | 否 | `/mcp` | 以 `/` 开头，无 query/fragment |
+| `TVCMALL_LOG_LEVEL` | 否 | `info` | `silent` / `error` / `warn` / `info` / `debug` |
 
-## 8. 后端业务 API
+PAT 不属于 server runtime config。禁止以环境变量配置一个供所有客户共享的 PAT。
 
-MCP 后端 Gateway 至少需要提供这些能力：
+## 10. 安全与验收检查
 
-```http
-GET  /api/mcp/products/search
-GET  /api/mcp/products/{id}
-POST /api/mcp/shipping/estimate
-
-GET  /api/mcp/orders
-GET  /api/mcp/orders/{id}
-GET  /api/mcp/orders/{id}/tracking
-POST /api/mcp/orders/tracking/batch
-POST /api/mcp/orders/export
-```
-
-如果已有 Open API 可以覆盖这些能力，后端可以先做一层 MCP Gateway 转发；如果现有 Open API 权限模型不适合客户侧 MCP，建议单独实现 MCP API 层。
-
-TVCMall 公开 Open API 文档已经有 Authorization、Product、Order、Shipping 等模块，可作为后端能力映射参考。
-
-## 9. 权限 Scope
-
-```text
-products:read       商品搜索和商品详情
-shipping:estimate   运费估算
-orders:read         订单列表和订单详情
-tracking:read       物流查询
-orders:export       订单导出
-profile:read        当前客户身份
-```
-
-第一版不要开放：
-
-```text
-orders:create
-orders:update
-orders:cancel
-payment:create
-address:update
-```
-
-## 10. 错误处理
-
-MCP server 不应直接把后端错误原文全部丢给 AI。建议统一错误码。
-
-```text
-AUTH_REQUIRED        未登录，请先运行 npx @tvcmall/mcp login
-TOKEN_EXPIRED        token 已过期，自动 refresh 失败
-PERMISSION_DENIED    当前账号没有该权限
-RATE_LIMITED         请求过快，请稍后再试
-VALIDATION_ERROR     参数格式错误
-API_UNAVAILABLE      TVCMall 服务暂不可用
-EXPORT_TOO_LARGE     导出范围过大，请缩小时间范围
-```
-
-用户可读错误示例：
-
-```text
-你还没有登录 TVCMall。请先在终端执行：
-npx @tvcmall/mcp login
-```
-
-## 11. 实现注意事项
-
-- 所有 tool 输入都要做 schema 校验。
-- 分页参数要设置默认值和上限。
-- 批量查询要设置最大数量，建议单次最多 50 个订单。
-- 当前 fake auth client 已覆盖 login、refresh、logout、me；真实 HTTP client 需要统一处理超时、重试、token refresh 和错误映射。
-- stdout 只用于 MCP 协议；日志输出到 stderr 或日志文件。
-- 返回给 AI 的数据要做摘要和脱敏，不要输出超大原始 JSON。
+- [ ] PAT 格式、header、每请求发送和 session 指纹绑定有测试。
+- [ ] PAT 原文仅存在于当前 session 内存，所有关闭路径均清理。
+- [ ] WebApi 请求使用相同 PAT，并只添加一次 `Bearer `。
+- [ ] WebApi URL 强制 HTTPS 且拒绝 userinfo/query/fragment。
+- [ ] 所有业务 routes 都是现有 WebApi routes，并已确认 method + normalized route allowlist。
+- [ ] `catalog.read` 与 `order.read` 由 ApplicationServices/RDS 判断，MCP 不做本地 scope 放行。
+- [ ] 401/403/429/5xx、网络、超时、body read failure 与 validation 错误映射稳定。
+- [ ] `tvcmall_auth_status` 只返回 configured。
+- [ ] 日志、异常、tool 输出、fixtures 和测试快照不含真实 PAT、完整响应或非必要 PII。
+- [ ] tools 只覆盖商品、订单、物流、运费和积分只读查询，不暴露写操作或文件型能力。

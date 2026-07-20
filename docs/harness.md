@@ -1,92 +1,127 @@
 # Harness Engineering Guide
 
-本项目优先采用 harness engineering：先把 MCP server 的协议边界、假数据、依赖注入和测试支撑做稳定，再逐步替换真实 TVCMall API。目标是让每个 tool 都能在不依赖真实账号、真实后端和本机 Keychain 状态的情况下被重复验证。
+本项目用 harness engineering 稳定 MCP 协议边界、业务 schemas、fixtures、依赖注入与错误映射。生产入口是远程 Streamable HTTP `/mcp`；仓库中的 stdio harness 只为内部协议和 tool 回归提供兼容适配，不是客户认证、安装或部署入口。
 
 ## 目标
 
-- 将业务行为放在 `src/tools/` 和各领域 client 接口后面，便于 unit test 和真实 API 替换。
-- 将假数据集中放在 `src/fixtures/`，避免散落在 fake client 中导致契约漂移。
-- 将 MCP tool 注册集中放在 `src/app/register-tools.ts`，`src/server.ts` 只负责装配依赖。
-- 将 stdio 协议测试放进 `tests/integration/`，验证真实 MCP JSON-RPC 边界。
-- 测试默认不读写真实系统凭证库，不依赖本机登录状态。
+- 将业务行为放在 `src/tools/` 与各领域 client interface 后，便于 unit test 和真实 WebApi 替换。
+- 将假数据集中放在 `src/fixtures/`，避免 fake client 与契约漂移。
+- 将 tool 注册集中放在 `src/app/register-tools.ts`，HTTP transport 与业务逻辑分离。
+- 以 Streamable HTTP 集成测试覆盖 PAT、session、`initialize`、`tools/list` 和 `tools/call`。
+- 保留内部 stdio 适配器做快速回归，但不让它代替远程认证与 session 测试。
+- 默认测试不连接真实 WebApi、不读取客户凭据、不依赖开发者本机状态。
 
-## 当前结构
+## 结构与职责
 
 ```text
 src/
   app/
-    register-tools.ts        # 注册全部 TVCMall MCP tools
-  fixtures/
-    products.ts              # 商品假数据
-    orders.ts                # 订单假数据
-    tracking.ts              # 物流假数据
+    register-tools.ts        # 注册只读 TVCMall tools
+    client-factory.ts        # 装配 fake 或 WebApi clients
+  http/
+    mcp-http-server.ts       # 远程 Streamable HTTP、PAT 与 session 生命周期
+    http-errors.ts           # HTTP 错误响应
+    request-body.ts          # 请求正文边界
+  auth/
+    request-auth-context.ts  # session 内 PAT 与 SHA-256 指纹
+  fixtures/                  # 非真实业务样本
   harness/
-    mcp-stdio-harness.ts     # 测试用 stdio JSON-RPC harness
-    memory-token-store.ts    # 测试用内存 token store
-    stdio-server.ts          # 集成测试专用 server 入口
-  config/
-    runtime-config.ts        # HTTP API 运行时环境变量读取
-  tools/
-    *.ts                     # tool 输入输出 schema 与 MCP 业务包装
-  */fake-*-client.ts         # 基于 fixtures 的 fake client
+    mcp-stdio-harness.ts     # 内部 stdio JSON-RPC 适配器
+    stdio-server.ts          # 内部集成测试入口
+  tools/                     # 输入/输出 schema、摘要和业务 wrapper
+  */fake-*-client.ts         # fixtures 驱动的 fake client
+  */http-*-client.ts         # 现有 TVCMall WebApi route client
 tests/
-  unit/                      # 直接测试 tool/client/CLI 行为
-  integration/
-    mcp-stdio.test.ts        # 启动 stdio server 后走 MCP JSON-RPC
+  unit/                      # schema、tool、session、client 和错误映射
+  integration/               # Streamable HTTP 与内部 stdio 协议测试
 ```
 
 ## Fixtures 规则
 
-- fixtures 是假数据唯一来源；不要在 fake client 内重新硬编码同一批业务样本。
-- fixtures 需要符合 `docs/api-contract.md` 中的输出契约。
-- fixtures 不放真实客户数据、真实 token、完整地址、电话或邮箱等敏感信息。
-- 修改 fixtures 后，需要运行相关领域 unit test，并至少运行 MCP stdio 集成测试。
+- fixtures 是 fake client 的唯一业务样本来源；不要在 fake client 或测试中复制整份响应。
+- fixtures 必须符合 `docs/api-contract.md` 的 tool 输出契约，并与外部 OpenAPI 样例保持可追踪关系。
+- fixtures 只能使用虚构用户、订单号、地址和物流数据，不得包含真实客户数据或真实 PAT。
+- 如测试需要认证值，只能使用显然虚假的格式样本，例如 `tmcp_v1_test-id.test-secret`；不得从环境变量读取后写入快照。
+- 修改 fixtures 后，运行相关领域 unit tests、Streamable HTTP 集成测试和必要的内部 stdio 回归。
 
-## 新增 Tool 的推荐步骤
+## Tool 开发流程
 
-1. 在 `src/tools/<domain>.ts` 定义输入 schema、输出 schema、tool wrapper 和错误映射。
-2. 在对应领域定义 client interface；fake client 从 `src/fixtures/` 读取样本数据。
-3. 在 `src/app/register-tools.ts` 注册 tool，不把注册逻辑写回 `src/server.ts`。
-4. 补充 unit test 覆盖未登录、参数边界、成功返回和错误返回。
-5. 如 tool 属于 MCP 对外能力，补充或扩展 `tests/integration/mcp-stdio.test.ts`，确认 `tools/list` 和 `tools/call` 正常。
+1. 在 `src/tools/<domain>.ts` 定义 Zod 输入/输出 schema、tool wrapper 和 AI 友好摘要。
+2. 在对应领域定义 client interface；fake client 读取 fixtures，HTTP client 调用现有 WebApi route。
+3. 在 `src/app/register-tools.ts` 注册 tool，不把业务逻辑写进 transport。
+4. 补 unit tests 覆盖参数边界、成功摘要、空结果和稳定错误映射。
+5. 确认目标 HTTP method + normalized route 已在 WebApi allowlist 登记为 `catalog.read` 或 `order.read`。
+6. 扩展 Streamable HTTP 集成测试，验证持有同一 PAT 的 session 能执行 `tools/list` / `tools/call`。
 
-## Stdio 集成测试
+tool 层不得从 PAT 推断用户或 scopes，也不得以本地权限列表代替 WebApi 授权。
 
-`tests/integration/mcp-stdio.test.ts` 会启动 `src/harness/stdio-server.ts`，再通过 JSON-RPC 调用 MCP 方法。该入口使用 `NullTokenStore`，所以测试结果不受本机 `node dist/index.js login` 或系统凭证库影响。
+## Streamable HTTP 集成边界
 
-常用命令：
+远程协议测试至少覆盖：
+
+- `POST /mcp` initialize 要求 `Authorization: Bearer tmcp_v1_...`。
+- 初始化响应返回 `Mcp-Session-Id`；后续 `POST`、`GET`、`DELETE` 必须携带该 ID 和同一 PAT。
+- 缺失、格式错误或替换 PAT 返回安全的 `AUTH_REQUIRED`，响应不包含任一 PAT。
+- 未知、已删除、idle TTL 过期或 server close 后的 session 不可继续使用。
+- 最大 session 容量包含并发初始化，达到上限后稳定拒绝新 session。
+- `tools/list` 不暴露写操作或文件型能力；`tools/call` 只返回摘要与受控 structured content。
+- transport `onclose`、`DELETE`、idle TTL 和 server close 都清理 session 认证上下文。
+
+HTTP harness 应使用本地监听端口和 stub/fake 依赖，不请求生产域名。PAT 泄漏断言应检查响应正文、错误文本、捕获日志和快照。
+
+## 内部 stdio 适配器
+
+`tests/integration/mcp-stdio.test.ts` 与 `src/harness/stdio-server.ts` 可用于验证 MCP JSON-RPC、tool schemas 和注册结果。它不具备以下证明能力：
+
+- 客户端每请求携带 PAT。
+- `Mcp-Session-Id` 与 SHA-256 指纹绑定。
+- HTTP `POST` / `GET` / `DELETE` 生命周期、容量和 idle TTL。
+- WebApi Bearer PAT 透传与 HTTP 错误映射。
+
+因此 stdio 结果不能作为远程认证或生产部署验收证据。该内部入口的 stdout 仍只能承载 MCP JSON-RPC；普通日志和错误栈必须写 stderr 或被测试捕获。
+
+常用内部回归命令：
 
 ```bash
 npm test -- tests/integration/mcp-stdio.test.ts
-npm test
 ```
 
-stdio 相关测试必须关注两点：
+## WebApi client 测试
 
-- stdout 只能承载 MCP JSON-RPC 协议消息。
-- 普通日志、调试信息和错误栈不能污染 stdout；测试可通过 stderr 断言兜底。
+每个真实 HTTP client 都应通过注入 fetch/stub server 验证：
 
-## 真实 API 替换策略
+- base URL 来自 `TVCMALL_WEBAPI_BASE_URL`，只允许 HTTPS 且无 userinfo/query/fragment。
+- URL 使用现有 TVCMall WebApi route，不创建 MCP 专用业务 route。
+- 当前 session PAT 原样进入 `Authorization`，且 `Bearer ` 只增加一次。
+- request schema、分页和批量上限与 tool 契约一致。
+- WebApi 响应先转换为受控领域对象，再由 tool 生成摘要；不透传超大原始正文。
+- `401`、`403`、`429`、`5xx`、网络、超时和 body read failure 映射到稳定错误码，且错误不包含响应正文或 PAT。
 
-- 保持 tool schema 和错误码稳定，优先替换 client 实现而不是 tool 注册和 tool wrapper。
-- 真实 API client 应实现当前领域 interface，例如 `ProductClient`、`OrderClient`、`TrackingClient`。
-- 新增真实 API client 后，fake client 和 fixtures 继续保留，用于离线测试、回归测试和契约对照。
-- 认证、token refresh 和权限错误需要先映射到 `docs/api-contract.md` 中定义的稳定错误码。
-- HTTP API base URL、timeout、API 环境、数据源开关、登录 API `Authorization` header、日志级别和导出目录等运行时配置从 `src/config/runtime-config.ts` 读取；测试应显式传入 env map，不直接依赖开发者本机环境变量。
-- token、密码和客户 PII 不属于运行时环境变量，继续通过 CLI 和系统凭证库管理；`TVCMALL_API_AUTHORIZATION` 如为敏感部署凭据，只能通过本机环境或部署注入。
-- 真实登录逻辑从 `src/auth/http-auth-client.ts` 和 CLI `login` 命令接入，当前仅覆盖 `docs/external/登录.openapi.yaml` 中已提供的 `/user/login`；默认 fake 模式仍不请求密码。
-- 设置 `TVCMALL_DATA_SOURCE=real` 后，server 会对 auth、商品、订单、积分、物流和运费能力装配 HTTP clients；商品、订单、积分、物流和运费 clients 的 `Authorization` header 必须来自 `StoredAuthSession.accessToken`，不能复用 `TVCMALL_API_AUTHORIZATION`。
-- 订单号场景下的物流和运费统一落在 `TrackingClient.getTrackingInfo` / `tvcmall_get_tracking_info`；`tvcmall_estimate_shipping` 只作为未下单商品按 SKU、数量和目的地预估的入口，避免 MCP Client 误选订单详情或运费预估工具。
+测试 MCP 层时应使用 fake/stub WebApi；测试 WebApi response mapping 时优先使用 `docs/external/` 中脱敏后的契约样例。
+
+## 真实 HTTP 集成
+
+自动化测试默认不得访问真实环境。需要验证 staging WebApi 时：
+
+1. 由 CI 或受控 shell secret 注入 staging MCP URL 与测试 PAT，不写入仓库文件。
+2. 使用专用、最小 scope、可撤销的测试 PAT，禁止复用生产客户 PAT。
+3. 只调用 allowlist 中的只读 route，并限制请求数量和返回数据范围。
+4. 捕获日志前确认代理、HTTP client 和测试 runner 会过滤 `Authorization`。
+5. 测试结束立即销毁 MCP session；PAT 轮换或撤销由 TVCMall 后端流程负责。
+
+真实集成至少验证一次 `catalog.read` 和一次 `order.read`；它用于确认 WebApi → ApplicationServices → RDS 的最终授权，不用于扩展 MCP 本地权限逻辑。
 
 ## 验证基线
 
 结构性重构或 harness 变更提交前，至少运行：
 
 ```bash
+npm test -- tests/unit/mcp-http-server.test.ts
+npm test -- tests/integration/mcp-streamable-http.test.ts
 npm run typecheck
 npm run build
 npm test
-npm pack --dry-run
+git diff --check
 ```
 
-如果改动涉及 stdio server，还需要确认集成测试覆盖启动、`initialize`、`tools/list`、`tools/call`，并确认 stdout 没有非协议日志。
+若仓库暂时没有某个列出的集成测试文件，应先补最小可运行测试，或在交付说明中明确替代验证命令与未覆盖风险。
