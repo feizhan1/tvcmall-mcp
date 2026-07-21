@@ -86,7 +86,7 @@ TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/api npm start
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `TVCMALL_WEBAPI_BASE_URL` | 无，必填 | 现有 TVCMall WebApi 基础 URL；必须为 HTTPS，且不得包含 userinfo、query 或 fragment |
-| `TVCMALL_API_TIMEOUT_MS` | `15000` | WebApi 请求超时，单位毫秒 |
+| `TVCMALL_API_TIMEOUT_MS` | `15000` | WebApi 请求超时，单位毫秒；合法范围 `1..2_147_483_647` |
 | `TVCMALL_API_ENV` | `production` | API 环境标识：`production`、`staging` 或 `sandbox` |
 | `TVCMALL_MCP_HOST` | `127.0.0.1` | HTTP 监听地址；生产环境通常由反向代理访问 |
 | `TVCMALL_MCP_PORT` | `3000` | HTTP 监听端口 |
@@ -94,6 +94,8 @@ TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/api npm start
 | `TVCMALL_LOG_LEVEL` | `info` | 日志级别；任何级别都必须脱敏凭据和 PII |
 
 `TVCMALL_WEBAPI_BASE_URL` 不提供隐式生产默认值，以免误连环境。MCP Server 只为 PAT 增加一次 `Bearer ` 前缀，并复用接入说明中列出的现有 WebApi route；不会新增 MCP 专用业务 route、调用独立验证服务或交换 token。
+
+`TVCMALL_API_TIMEOUT_MS` 默认 `15000` ms，合法范围为 `1..2_147_483_647` ms；非法或超限值回退到默认值。该 deadline 覆盖等待 response headers 与读取 JSON body；超时映射为 `API_UNAVAILABLE`。
 
 ## 最小协议调用
 

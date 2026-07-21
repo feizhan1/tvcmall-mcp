@@ -86,21 +86,23 @@ tool 层只做参数校验、业务 client 调用和输出摘要，不读取本�
 | WebApi `403` | `PERMISSION_DENIED` |
 | WebApi `429` | `RATE_LIMITED` |
 | WebApi `5xx`、网络、超时、body read failure | `API_UNAVAILABLE` |
-| Zod 输入错误 | `VALIDATION_ERROR` |
+| MCP SDK 输入 schema 不合法 | JSON-RPC `Invalid params`（`-32602`）；handler 前拒绝，不进入 WebApi |
 
-错误响应不得包含 PAT、上游正文、内部 host、用户归属或精确撤销原因。
+输入 schema 不合法不属于项目的 WebApi 稳定错误码。MCP SDK 在 tool handler 前拒绝请求，响应不得包含 PAT、堆栈、上游正文、内部 host、用户归属或精确撤销原因。
 
 ## 配置与部署
 
 | 配置 | 说明 |
 | --- | --- |
 | `TVCMALL_WEBAPI_BASE_URL` | 必填 HTTPS WebApi 基础 URL；无 userinfo/query/fragment |
-| `TVCMALL_API_TIMEOUT_MS` | WebApi 超时，默认 15000 ms |
+| `TVCMALL_API_TIMEOUT_MS` | WebApi 超时；默认 15000 ms；合法范围 `1..2_147_483_647` ms |
 | `TVCMALL_MCP_HOST` | 监听地址，默认 `127.0.0.1` |
 | `TVCMALL_MCP_PORT` | 监听端口，默认 `3000` |
 | `TVCMALL_MCP_PATH` | MCP 路径，默认 `/mcp` |
 
 生产环境部署在 TLS 终止层后。反向代理与应用均不记录 `Authorization`。多副本部署使用 session affinity，不通过共享存储复制 PAT。
+
+`TVCMALL_API_TIMEOUT_MS` 默认 `15000` ms，合法范围为 `1..2_147_483_647` ms；非法或超限值回退到默认值。该 deadline 覆盖等待 response headers 与读取 JSON body；超时映射为 `API_UNAVAILABLE`。
 
 ## 安全约束
 

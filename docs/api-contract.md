@@ -309,12 +309,14 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 | WebApi `429` | tool error | `RATE_LIMITED` | 稍后重试；只使用安全重试提示 |
 | WebApi `5xx` | tool error | `API_UNAVAILABLE` | WebApi 暂不可用 |
 | 网络错误、超时、body read failure | tool error | `API_UNAVAILABLE` | 稍后重试，不归因于 PAT |
-| 输入 schema 不合法 | tool error | `VALIDATION_ERROR` | 返回安全字段/约束摘要 |
+| MCP SDK 输入 schema 不合法 | JSON-RPC error，handler 前拒绝 | `Invalid params`（`-32602`） | 修正输入；不进入 WebApi |
 | session ID 不存在或已清理 | HTTP `404` | `SESSION_NOT_FOUND` | 重新 initialize |
 | session PAT 指纹不一致 | HTTP `401` | `AUTH_REQUIRED` | 不暴露 session 归属 |
 | session 达到容量上限 | HTTP `503` | `SESSION_CAPACITY_REACHED` | 稍后重新 initialize |
 
 WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/scope 授权问题。WebApi `5xx`、网络、超时或正文读取失败不可映射成认证错误。
+
+输入 schema 由 MCP SDK 在 tool handler 前校验；不合法输入按 JSON-RPC `Invalid params`（`-32602`）拒绝，不进入 WebApi，也不属于项目的 WebApi 稳定错误码。错误不得泄露 PAT 或堆栈。
 
 ### 8.2 安全错误正文
 
@@ -330,7 +332,7 @@ WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/sc
 | 变量 | 必填 | 默认值 | 校验 |
 | --- | --- | --- | --- |
 | `TVCMALL_WEBAPI_BASE_URL` | 是 | 无 | HTTPS；无 userinfo/query/fragment |
-| `TVCMALL_API_TIMEOUT_MS` | 否 | `15000` | 正整数，毫秒 |
+| `TVCMALL_API_TIMEOUT_MS` | 否 | `15000` | `1..2_147_483_647` 范围内的整数，毫秒 |
 | `TVCMALL_API_ENV` | 否 | `production` | `production` / `staging` / `sandbox` |
 | `TVCMALL_MCP_HOST` | 否 | `127.0.0.1` | 非空字符串 |
 | `TVCMALL_MCP_PORT` | 否 | `3000` | 正整数 |
@@ -338,6 +340,8 @@ WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/sc
 | `TVCMALL_LOG_LEVEL` | 否 | `info` | `silent` / `error` / `warn` / `info` / `debug` |
 
 PAT 不属于 server runtime config。禁止以环境变量配置一个供所有客户共享的 PAT。
+
+`TVCMALL_API_TIMEOUT_MS` 默认 `15000` ms，合法范围为 `1..2_147_483_647` ms；非法或超限值回退到默认值。该 deadline 覆盖等待 response headers 与读取 JSON body；超时映射为 `API_UNAVAILABLE`。
 
 ## 10. 安全与验收检查
 
@@ -347,7 +351,7 @@ PAT 不属于 server runtime config。禁止以环境变量配置一个供所有
 - [ ] WebApi URL 强制 HTTPS 且拒绝 userinfo/query/fragment。
 - [ ] 所有业务 routes 都是现有 WebApi routes，并已确认 method + normalized route allowlist。
 - [ ] `catalog.read` 与 `order.read` 由 ApplicationServices/RDS 判断，MCP 不做本地 scope 放行。
-- [ ] 401/403/429/5xx、网络、超时、body read failure 与 validation 错误映射稳定。
+- [ ] 401/403/429/5xx、网络、超时与 body read failure 的项目错误映射稳定；非法输入由 MCP SDK 返回 `Invalid params`（`-32602`）。
 - [ ] `tvcmall_auth_status` 只返回 configured。
 - [ ] 日志、异常、tool 输出、fixtures 和测试快照不含真实 PAT、完整响应或非必要 PII。
 - [ ] tools 只覆盖商品、订单、物流、运费和积分只读查询，不暴露写操作或文件型能力。

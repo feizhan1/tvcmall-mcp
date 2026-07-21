@@ -80,7 +80,7 @@ MCP session 只存在于单个进程内存。多副本部署需要在负载均�
 | 配置 | 要求 |
 | --- | --- |
 | `TVCMALL_WEBAPI_BASE_URL` | 必填 HTTPS；无 userinfo、query、fragment；指向现有 TVCMall WebApi 基础路径 |
-| `TVCMALL_API_TIMEOUT_MS` | WebApi 超时；默认 15000 ms，达到后映射 `API_UNAVAILABLE` |
+| `TVCMALL_API_TIMEOUT_MS` | WebApi 超时；默认 15000 ms；合法范围 `1..2_147_483_647` ms |
 | `TVCMALL_MCP_HOST` | 默认 `127.0.0.1`；生产监听范围与反向代理拓扑一致 |
 | `TVCMALL_MCP_PORT` | 默认 `3000` |
 | `TVCMALL_MCP_PATH` | 默认 `/mcp`；不得带 query/fragment |
@@ -88,6 +88,8 @@ MCP session 只存在于单个进程内存。多副本部署需要在负载均�
 | `sessionIdleTtlMs` | session 空闲清理时间；默认 30 分钟 |
 
 部署环境不配置共享 PAT。健康检查 `GET /healthz` 只返回服务存活状态，不返回配置、session、PAT 或后端身份。
+
+`TVCMALL_API_TIMEOUT_MS` 默认 `15000` ms，合法范围为 `1..2_147_483_647` ms；非法或超限值回退到默认值。该 deadline 覆盖等待 response headers 与读取 JSON body；超时映射为 `API_UNAVAILABLE`。
 
 ## 5. 数据流转图
 
@@ -195,7 +197,9 @@ UPPERCASE_HTTP_METHOD + normalized_route -> required_scope
 | WebApi `403` | `PERMISSION_DENIED` | 提示 scope/route allowlist 不足 |
 | WebApi `429` | `RATE_LIMITED` | 仅透出安全的重试提示 |
 | WebApi `5xx`、网络、超时、正文读取失败 | `API_UNAVAILABLE` | 不透出上游正文，不归因于 PAT |
-| Zod 输入失败 | `VALIDATION_ERROR` | 只返回安全字段和约束摘要 |
+| MCP SDK 输入 schema 不合法 | `Invalid params`（`-32602`） | handler 前拒绝，不进入 WebApi；不属于项目 WebApi 稳定码 |
+
+输入 schema 由 MCP SDK 在 tool handler 前校验；不合法输入按 JSON-RPC `Invalid params`（`-32602`）拒绝，不进入 WebApi，也不属于项目的 WebApi 稳定错误码。该错误不得泄露 PAT 或堆栈。
 
 日志可记录 request ID、tool name、HTTP status、耗时、route template 与 session 计数，但不得记录 `Authorization`、PAT、PAT 指纹、完整 URL query、请求/响应正文或 PII。错误对象与 tracing attributes 也执行同一脱敏策略。
 
