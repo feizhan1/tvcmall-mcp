@@ -89,11 +89,14 @@ describe('createMcpHttpServer', () => {
     ['missing API KEY', undefined],
     ['empty API KEY', ''],
     ['duplicate API KEY', ['tmcp_v1_first.secret', 'tmcp_v1_first.secret']],
+    ['whitespace-padded API KEY', ' tmcp_v1_token-id.secret-value '],
     ['Bearer-prefixed API KEY', 'Bearer tmcp_v1_token-id.secret-value'],
     ['website token', 'website-token'],
     ['invalid tmcp format', 'tmcp_v1_missing-secret.']
   ])('rejects %s with a stable error that does not expose the credential', async (_label, apiKey) => {
+    const server = createTestServer();
     const response = await dispatch({
+      server,
       method: 'POST',
       apiKey,
       body: initializeRequest()

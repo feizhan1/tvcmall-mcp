@@ -247,8 +247,8 @@ function readTvcMallApiKey(req: IncomingMessage): string | undefined {
   if (req.headers.authorization !== undefined) return undefined;
   const apiKey = req.headers['tvcmall_api_key'];
   if (typeof apiKey !== 'string') return undefined;
-  const pat = apiKey.trim();
-  return pat || undefined;
+  if (apiKey !== apiKey.trim()) return undefined;
+  return apiKey || undefined;
 }
 
 function isInitializeRequest(body: unknown): boolean {

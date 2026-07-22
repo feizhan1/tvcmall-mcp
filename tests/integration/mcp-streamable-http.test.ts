@@ -25,7 +25,9 @@ describe('Streamable HTTP MCP server', () => {
     ['website token', 'website-token'],
     ['invalid tmcp format', 'tmcp_v1_missing-secret.']
   ])('rejects %s before accepting an initialize request', async (_label, apiKey) => {
-    const baseUrl = await startServer();
+    const baseUrl = await startServer({
+      createMcpServer: () => new McpServer({ name: 'pat-http-test', version: '1' })
+    });
     const response = await initialize(baseUrl, apiKey);
     const body = await response.text();
 
