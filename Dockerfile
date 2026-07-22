@@ -18,6 +18,7 @@ FROM node:20-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
+ENV TVCMALL_MCP_HOST=0.0.0.0
 
 # keytar is loaded by the legacy stdio/token-store modules at runtime.
 RUN apt-get update \
