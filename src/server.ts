@@ -4,6 +4,7 @@ import { createTvcMallClients } from './app/client-factory.js';
 import { registerTvcMallTools } from './app/register-tools.js';
 import type { AuthClient } from './auth/auth-client.js';
 import type { RequestAuthContext } from './auth/request-auth-context.js';
+import type { BalanceClient } from './balance/balance-client.js';
 import type { OrderClient } from './orders/order-client.js';
 import type { PointsClient } from './points/points-client.js';
 import type { ProductClient } from './products/product-client.js';
@@ -17,6 +18,7 @@ export interface ServerOptions {
   authContext?: RequestAuthContext;
   tokenStore?: TokenStore;
   authClient?: AuthClient;
+  balanceClient?: BalanceClient;
   productClient?: ProductClient;
   pointsClient?: PointsClient;
   shippingClient?: ShippingClient;
@@ -28,6 +30,7 @@ export function createTvcMallMcpServer(options: ServerOptions = {}): McpServer {
   const tokenStore = options.tokenStore ?? createDefaultTokenStore();
   const defaultClients = createTvcMallClients();
   const authClient = options.authClient ?? defaultClients.authClient;
+  const balanceClient = options.balanceClient ?? defaultClients.balanceClient;
   const productClient = options.productClient ?? defaultClients.productClient;
   const pointsClient = options.pointsClient ?? defaultClients.pointsClient;
   const shippingClient = options.shippingClient ?? defaultClients.shippingClient;
@@ -35,7 +38,7 @@ export function createTvcMallMcpServer(options: ServerOptions = {}): McpServer {
   const trackingClient = options.trackingClient ?? defaultClients.trackingClient;
   const server = new McpServer({ name: 'tvcmall-mcp', version: PACKAGE_VERSION });
 
-  registerTvcMallTools(server, { authContext: options.authContext, tokenStore, authClient, productClient, pointsClient, shippingClient, orderClient, trackingClient });
+  registerTvcMallTools(server, { authContext: options.authContext, tokenStore, authClient, balanceClient, productClient, pointsClient, shippingClient, orderClient, trackingClient });
 
   return server;
 }

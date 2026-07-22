@@ -25,7 +25,8 @@ describe('MCP stdio harness', () => {
       'tvcmall_auth_status',
       'tvcmall_search_products',
       'tvcmall_get_points',
-      'tvcmall_list_point_records'
+      'tvcmall_list_point_records',
+      'tvcmall_list_balance_records'
     ]));
 
     const searchResponse = await harness.request('tools/call', {

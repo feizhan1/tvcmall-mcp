@@ -2,7 +2,7 @@
 
 TVCMall Customer MCP 是部署在 TVCMall 基础设施中的远程 Streamable HTTP MCP Server。Claude、Cursor、Codex 或其他 MCP Client 通过 HTTPS `/mcp` 连接，并在每个请求中携带 TVCMall 签发的 Personal Access Token（PAT）。客户无需在本机安装本项目、运行登录 CLI 或保存网站账号密码。
 
-当前 v0.1 提供商品、订单、物流、运费和积分的只读查询。MCP Client 通过 `TVCMALL_API_KEY` 发送原始 PAT；MCP Server 调用现有 TVCMall WebApi 时转换为 `Authorization: Bearer <PAT>`。WebApi、ApplicationServices 与 RDS 负责 PAT 校验、scope 和 method + normalized route allowlist 授权。
+当前 v0.1 提供商品、订单、物流、运费、积分和余额流水的只读查询。MCP Client 通过 `TVCMALL_API_KEY` 发送原始 PAT；MCP Server 调用现有 TVCMall WebApi 时转换为 `Authorization: Bearer <PAT>`。WebApi、ApplicationServices 与 RDS 负责 PAT 校验、scope 和 method + normalized route allowlist 授权。
 
 ## 文档地图
 
@@ -46,6 +46,8 @@ tmcp_v1_{tokenId}.{secret}
 查询我最近 10 个订单
 查询订单 V24011000008 的物流和运费
 查看我的积分余额和积分记录
+查下余额流水
+查看余额消耗流水
 ```
 
 ## Tools
@@ -62,10 +64,13 @@ tmcp_v1_{tokenId}.{secret}
 | `tvcmall_batch_get_tracking` | 批量查询最多 50 个订单的物流 | `order.read` |
 | `tvcmall_get_points` | 查看积分汇总 | `order.read` |
 | `tvcmall_list_point_records` | 分页查看积分记录 | `order.read` |
+| `tvcmall_list_balance_records` | 分页查看余额获取和消耗流水 | `order.read` |
 
 `tvcmall_auth_status` 的结果只有 `{ "configured": true | false }`，表示 PAT 是否存在于当前 MCP session，不表示 WebApi 已验证该 PAT。
 
 `tvcmall_list_point_records` 当前调用 `/api/v3/user/points/list`；该 method + route 投产前必须由 WebApi/ApplicationServices 团队登记到 `order.read` allowlist。未登记时 WebApi 会返回 `403`，MCP 映射为 `PERMISSION_DENIED`，MCP Server 不会绕过授权。
+
+`tvcmall_list_balance_records` 调用已登记的 `GET /api/v3/user/balance/list`。输入 `direction` 默认为 `all`，也可设为 `income`（获取）或 `expense`（消耗）；单页默认 20 条、最多 50 条。结果不会返回上游的 `UserID`。
 
 v0.1 不提供文件导出能力，也不开放下单、支付、改地址、取消订单、积分兑换等写操作。tool 返回 AI 友好摘要和受 schema 约束的结构化数据，不返回 PAT、完整上游响应或不必要的 PII。
 

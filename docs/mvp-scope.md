@@ -15,7 +15,7 @@
 - 费用预估：按 SKU、数量和目的国家/地区估算未下单商品运费。
 - 订单：订单列表与详情。
 - 履约：单个或批量查询物流，以及已下单订单的运费信息。
-- 客户权益：积分汇总与积分记录。
+- 客户权益：积分汇总、积分记录与余额流水。
 
 示例问题：
 
@@ -26,6 +26,7 @@
 批量查询这些订单的物流状态
 查询订单 V24011000008 的物流和运费
 查看我的积分余额
+查下余额流水
 ```
 
 ## 3. 已确定架构
@@ -63,6 +64,7 @@ Existing TVCMall WebApi routes + Authorization: Bearer 同一 PAT
 | `tvcmall_batch_get_tracking` | 批量查询物流 | 每次最多 50 个订单号 |
 | `tvcmall_get_points` | 查询积分汇总 | 只读 |
 | `tvcmall_list_point_records` | 查询积分记录 | 分页，单页最多 50 条；`/api/v3/user/points/list` 投产前需登记 `order.read` allowlist |
+| `tvcmall_list_balance_records` | 查询余额获取和消耗流水 | 分页，单页最多 50 条；支持全部、获取、消耗筛选 |
 
 ### 不包含
 
@@ -75,7 +77,7 @@ Existing TVCMall WebApi routes + Authorization: Bearer 同一 PAT
 ## 5. 授权范围
 
 - `catalog.read`：商品搜索、商品详情、未下单商品运费估算。
-- `order.read`：订单列表、订单详情、物流、已下单订单运费、积分。
+- `order.read`：订单列表、订单详情、物流、已下单订单运费、积分和余额流水。
 
 授权不在 MCP tool 层模拟。目标 WebApi route 未登记、被禁用或 PAT scope 不足时，WebApi 返回 `403`，MCP 映射为 `PERMISSION_DENIED`。
 
@@ -98,7 +100,7 @@ Existing TVCMall WebApi routes + Authorization: Bearer 同一 PAT
 
 - 配置 `TVCMALL_API_ENV` 和 `TVCMALL_WEBAPI_BASE_URL`：`production`、`staging` 强制 HTTPS；仅 `sandbox` 可连接 loopback 或 RFC1918 的 HTTP WebApi。
 - 所有真实业务 client 使用 session 中的同一 PAT，只添加一次 `Bearer `。
-- 对接现有商品、订单、物流、运费和积分 routes。
+- 对接现有商品、订单、物流、运费、积分和余额流水 routes。
 - 统一映射 WebApi 状态、网络、超时与正文读取错误。
 
 ### 阶段 3：只读 Tools
@@ -123,7 +125,7 @@ MVP 完成标准：
 2. 缺失、带 `Bearer ` 前缀或基本格式错误的 `TVCMALL_API_KEY`，以及旧入站 `Authorization`，均返回 `401 AUTH_REQUIRED`，且响应与日志不含 PAT。
 3. 同一 `Mcp-Session-Id` 只能使用初始化时的 PAT；不同 session 不共享认证上下文。
 4. MCP 以相同 PAT 调用现有 WebApi route，不新增专用业务 route，也不访问 ApplicationServices/RDS。
-5. 商品、订单、物流、运费和积分的只读 tools 返回摘要与 schema 约束结果。
+5. 商品、订单、物流、运费、积分和余额流水的只读 tools 返回摘要与 schema 约束结果。
 6. `catalog.read` / `order.read` 和 route allowlist 由 WebApi 后端执行；MCP 不在本地推断授权。
 7. WebApi `401` / `403` / `429` / `5xx` 及网络、超时、正文读取失败映射为稳定错误码。
 8. `DELETE /mcp`、transport `onclose`、idle TTL 和 server close 都会释放 session 中的 PAT 与指纹。

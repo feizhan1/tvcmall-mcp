@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { AuthClient } from '../auth/auth-client.js';
 import type { RequestAuthContext } from '../auth/request-auth-context.js';
+import type { BalanceClient } from '../balance/balance-client.js';
 import { WebApiRequestError } from '../api/http-client.js';
 import { MCP_ERROR_MESSAGES } from '../errors/mcp-errors.js';
 import type { OrderClient } from '../orders/order-client.js';
@@ -12,6 +13,7 @@ import type { ShippingClient } from '../shipping/shipping-client.js';
 import type { TokenStore } from '../storage/token-store.js';
 import type { TrackingClient } from '../tracking/tracking-client.js';
 import { AuthStatusOutputSchema, createAuthStatusToolResult } from '../tools/auth-status.js';
+import { ListBalanceRecordsInputSchema, ListBalanceRecordsOutputSchema, listBalanceRecordsForMcp } from '../tools/balance.js';
 import {
   GetOrderDetailInputSchema,
   ListOrdersInputSchema,
@@ -44,6 +46,7 @@ export interface RegisterToolDependencies {
   // Kept temporarily so the legacy stdio server can register tools during migration.
   tokenStore?: TokenStore;
   authClient?: AuthClient;
+  balanceClient: BalanceClient;
   productClient: ProductClient;
   pointsClient: PointsClient;
   shippingClient: ShippingClient;
@@ -52,7 +55,7 @@ export interface RegisterToolDependencies {
 }
 
 export function registerTvcMallTools(server: McpServer, dependencies: RegisterToolDependencies): void {
-  const { authContext, productClient, pointsClient, shippingClient, orderClient, trackingClient } = dependencies;
+  const { authContext, balanceClient, productClient, pointsClient, shippingClient, orderClient, trackingClient } = dependencies;
 
   server.registerTool(
     'tvcmall_auth_status',
@@ -82,6 +85,17 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
     'tvcmall_list_point_records',
     { title: 'TVCMall List Point Records', description: '查询当前客户 TVCMall 积分获取和使用记录', inputSchema: ListPointRecordsInputSchema, outputSchema: ListPointRecordsOutputSchema },
     async (input) => handleToolCall(() => listPointRecordsForMcp(input, { authContext, pointsClient }))
+  );
+
+  server.registerTool(
+    'tvcmall_list_balance_records',
+    {
+      title: 'TVCMall List Balance Records',
+      description: '分页查询当前客户的余额获取和消耗流水；可使用 all、income、expense 筛选',
+      inputSchema: ListBalanceRecordsInputSchema,
+      outputSchema: ListBalanceRecordsOutputSchema
+    },
+    async (input) => handleToolCall(() => listBalanceRecordsForMcp(input, { authContext, balanceClient }))
   );
 
   server.registerTool(

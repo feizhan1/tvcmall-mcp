@@ -29,8 +29,8 @@ src/
     mcp-stdio-harness.ts     # 内部 stdio JSON-RPC 适配器
     stdio-server.ts          # 内部集成测试入口
   tools/                     # 输入/输出 schema、摘要和业务 wrapper
-  */fake-*-client.ts         # fixtures 驱动的 fake client
-  */http-*-client.ts         # 现有 TVCMall WebApi route client
+  */fake-*-client.ts         # fixtures 驱动的 fake client，包含余额流水
+  */http-*-client.ts         # 现有 TVCMall WebApi route client，包含余额流水
 tests/
   unit/                      # schema、tool、session、client 和错误映射
   integration/               # Streamable HTTP 与内部 stdio 协议测试
@@ -39,7 +39,7 @@ tests/
 ## Fixtures 规则
 
 - fixtures 是 fake client 的唯一业务样本来源；不要在 fake client 或测试中复制整份响应。
-- fixtures 必须符合 `docs/api-contract.md` 的 tool 输出契约，并与外部 OpenAPI 样例保持可追踪关系。
+- fixtures 必须符合 `docs/api-contract.md` 的 tool 输出契约，并与外部 OpenAPI 样例保持可追踪关系；余额流水 fixture 不得复制上游 `UserID`。
 - fixtures 只能使用虚构用户、订单号、地址和物流数据，不得包含真实客户数据或真实 PAT。
 - 如测试需要认证值，只能使用显然虚假的格式样本，例如 `tmcp_v1_test-id.test-secret`；不得从环境变量读取后写入快照。
 - 修改 fixtures 后，运行相关领域 unit tests、Streamable HTTP 集成测试和必要的内部 stdio 回归。

@@ -1,0 +1,57 @@
+openapi: 3.0.1
+info:
+  title: 默认模块
+  description: ''
+  version: 1.0.0
+tags: []
+paths:
+  /v3/user/balance/list:
+    get:
+      summary: 余额流水
+      deprecated: false
+      description: ''
+      tags: []
+      parameters:
+        - name: pageindex
+          in: query
+          description: ''
+          required: false
+          example: '1'
+          schema:
+            type: string
+        - name: pagesize
+          in: query
+          description: ''
+          required: false
+          example: '20'
+          schema:
+            type: string
+        - name: pointstype
+          in: query
+          description: ''
+          required: false
+          example: '0'
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          description: ''
+          example: tmcp_v1_test-id.test-secret
+          schema:
+            type: string
+            default: tmcp_v1_test-id.test-secret
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+      security: []
+components:
+  schemas: {}
+  responses: {}
+  securitySchemes: {}
+servers: []
+security: []

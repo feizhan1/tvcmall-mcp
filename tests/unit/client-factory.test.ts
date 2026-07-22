@@ -12,6 +12,8 @@ import { HttpShippingClient } from '../../src/shipping/http-shipping-client.js';
 import { FakeTrackingClient } from '../../src/tracking/fake-tracking-client.js';
 import { HttpTrackingClient } from '../../src/tracking/http-tracking-client.js';
 import { HttpProductClient } from '../../src/products/http-product-client.js';
+import { FakeBalanceClient } from '../../src/balance/fake-balance-client.js';
+import { HttpBalanceClient } from '../../src/balance/http-balance-client.js';
 
 describe('createTvcMallClients', () => {
   it('uses fake clients by default', () => {
@@ -27,6 +29,7 @@ describe('createTvcMallClients', () => {
     });
 
     expect(clients.authClient).toBeInstanceOf(FakeAuthClient);
+    expect(clients.balanceClient).toBeInstanceOf(FakeBalanceClient);
     expect(clients.productClient).toBeInstanceOf(FakeProductClient);
     expect(clients.orderClient).toBeInstanceOf(FakeOrderClient);
     expect(clients.pointsClient).toBeInstanceOf(FakePointsClient);
@@ -47,6 +50,7 @@ describe('createTvcMallClients', () => {
     });
 
     expect(clients.authClient).toBeInstanceOf(HttpAuthClient);
+    expect(clients.balanceClient).toBeInstanceOf(HttpBalanceClient);
     expect(clients.productClient).toBeInstanceOf(HttpProductClient);
     expect(clients.orderClient).toBeInstanceOf(HttpOrderClient);
     expect(clients.pointsClient).toBeInstanceOf(HttpPointsClient);
@@ -57,6 +61,7 @@ describe('createTvcMallClients', () => {
     }
     for (const client of [
       clients.productClient,
+      clients.balanceClient,
       clients.orderClient,
       clients.pointsClient,
       clients.shippingClient,

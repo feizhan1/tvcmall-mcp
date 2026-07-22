@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BaseHttpClient, type JsonObject } from '../../src/api/http-client.js';
 import { registerTvcMallTools } from '../../src/app/register-tools.js';
 import { createPatAuthContext } from '../../src/auth/request-auth-context.js';
+import { FakeBalanceClient } from '../../src/balance/fake-balance-client.js';
 import { FakeOrderClient } from '../../src/orders/fake-order-client.js';
 import { FakePointsClient } from '../../src/points/fake-points-client.js';
 import type { ProductClient, ProductSearchInput } from '../../src/products/product-client.js';
@@ -325,6 +326,7 @@ async function callSearchProductsTool(error: unknown): Promise<CallToolResult> {
   registerTvcMallTools(server, {
     authContext: createPatAuthContext(pat),
     productClient,
+    balanceClient: new FakeBalanceClient(),
     pointsClient: new FakePointsClient(),
     shippingClient: new FakeShippingClient(),
     orderClient: new FakeOrderClient(),

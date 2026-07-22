@@ -195,6 +195,7 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 | `tvcmall_batch_get_tracking` | `order_ids`（1..50） | 命中数量和物流摘要列表 | `order.read`；逐个调用物流 route |
 | `tvcmall_get_points` | `{}` | 可用/待生效/累计获得/累计使用积分 | `order.read`；积分汇总 route |
 | `tvcmall_list_point_records` | `page=1`、`page_size=20`（最大 50） | 分页、总数和积分记录摘要 | `order.read`；积分记录 route，投产前确认 allowlist |
+| `tvcmall_list_balance_records` | `direction=all`、`page=1`、`page_size=20`（最大 50） | 筛选、分页、总数和余额流水摘要 | `order.read`；`GET /api/v3/user/balance/list` |
 
 ### 6.2 `tvcmall_auth_status`
 
@@ -297,6 +298,22 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 
 积分 tool 只读；积分兑换、转余额或其他写操作不在 v0.1 范围。
 
+### 6.8 余额流水输入
+
+```json
+{
+  "direction": "all",
+  "page": 1,
+  "page_size": 20
+}
+```
+
+- `all` → `pointstype=0`：全部流水。
+- `income` → `pointstype=1`：获取余额。
+- `expense` → `pointstype=2`：消耗余额。
+
+余额流水 tool 调用 `GET /api/v3/user/balance/list`，只读且单页最多 50 条。结构化记录包含金额、类型、说明、关联订单和时间；不返回 WebApi 响应中的 `UserID`。记录返回未知 `PointsType` 时映射为 `unknown`，不得根据金额正负猜测方向。
+
 ## 7. 输出约束
 
 - 每个成功 tool 同时提供简短 `content` 文本和符合 output schema 的 `structuredContent`。
@@ -365,4 +382,4 @@ PAT 不属于 server runtime config。禁止以环境变量配置一个供所有
 - [ ] 401/403/429/5xx、网络、超时与 body read failure 的项目错误映射稳定；非法输入由 MCP SDK 返回 `Invalid params`（`-32602`）。
 - [ ] `tvcmall_auth_status` 只返回 configured。
 - [ ] 日志、异常、tool 输出、fixtures 和测试快照不含真实 PAT、完整响应或非必要 PII。
-- [ ] tools 只覆盖商品、订单、物流、运费和积分只读查询，不暴露写操作或文件型能力。
+- [ ] tools 只覆盖商品、订单、物流、运费、积分和余额流水只读查询，不暴露写操作或文件型能力。

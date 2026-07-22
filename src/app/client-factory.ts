@@ -1,6 +1,9 @@
 import type { AuthClient } from '../auth/auth-client.js';
 import { FakeAuthClient } from '../auth/fake-auth-client.js';
 import { HttpAuthClient } from '../auth/http-auth-client.js';
+import type { BalanceClient } from '../balance/balance-client.js';
+import { FakeBalanceClient } from '../balance/fake-balance-client.js';
+import { HttpBalanceClient } from '../balance/http-balance-client.js';
 import type { TvcMallRuntimeConfig } from '../config/runtime-config.js';
 import { loadRuntimeConfig } from '../config/runtime-config.js';
 import type { OrderClient } from '../orders/order-client.js';
@@ -21,6 +24,7 @@ import { HttpTrackingClient } from '../tracking/http-tracking-client.js';
 
 export interface TvcMallClients {
   authClient: AuthClient;
+  balanceClient: BalanceClient;
   productClient: ProductClient;
   pointsClient: PointsClient;
   shippingClient: ShippingClient;
@@ -32,6 +36,7 @@ export function createTvcMallClients(config: TvcMallRuntimeConfig = loadRuntimeC
   if (config.dataSource === 'real') {
     return {
       authClient: new HttpAuthClient({ baseUrl: config.webApiBaseUrl, authorization: config.apiAuthorization }),
+      balanceClient: new HttpBalanceClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
       productClient: new HttpProductClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
       pointsClient: new HttpPointsClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
       shippingClient: new HttpShippingClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
@@ -42,6 +47,7 @@ export function createTvcMallClients(config: TvcMallRuntimeConfig = loadRuntimeC
 
   return {
     authClient: new FakeAuthClient(),
+    balanceClient: new FakeBalanceClient(),
     productClient: new FakeProductClient(),
     pointsClient: new FakePointsClient(),
     shippingClient: new FakeShippingClient(),

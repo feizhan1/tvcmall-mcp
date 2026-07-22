@@ -37,6 +37,7 @@ describe('createTvcMallMcpServer', () => {
       'tvcmall_get_points',
       'tvcmall_get_product_detail',
       'tvcmall_get_tracking_info',
+      'tvcmall_list_balance_records',
       'tvcmall_list_orders',
       'tvcmall_list_point_records',
       'tvcmall_search_products'
@@ -62,6 +63,7 @@ describe('createTvcMallMcpServer', () => {
 
     expect(registeredTools.tvcmall_search_products.description).toContain('只读');
     expect(registeredTools.tvcmall_get_product_detail.description).toContain('只读');
+    expect(registeredTools.tvcmall_list_balance_records.description).toContain('余额获取和消耗流水');
     expect(registeredTools.tvcmall_list_orders.description).toContain('只读');
     expect(JSON.stringify(registeredTools)).not.toContain('使用假数据');
   });
