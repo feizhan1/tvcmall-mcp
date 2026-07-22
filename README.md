@@ -88,6 +88,24 @@ TVCMALL_API_ENV=production TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/ap
 
 生产环境应把服务部署在 TLS 终止层后，只暴露 `/mcp` 和无敏感信息的 `/healthz`。反向代理与应用日志都不得记录入站 `TVCMALL_API_KEY`、出站 `Authorization` 或 PAT。MCP Server 不配置服务器共享 PAT；PAT 只能由各 MCP Client 在请求头中提供。
 
+### Docker 构建与推送
+
+先通过阿里云控制台提供的凭据登录镜像仓库，再在仓库根目录执行：
+
+```bash
+docker login crpi-xjd40982wqk3bdon.cn-shenzhen.personal.cr.aliyuncs.com
+./scripts/docker-build-push.sh
+```
+
+脚本默认构建 `linux/amd64` 镜像，以当前 Git 提交短 SHA 和 `latest` 两个标签推送到公网仓库。需要显式指定标签或通过专有网络仓库推送时，可覆盖环境变量：
+
+```bash
+IMAGE_TAG=release-20260722 ./scripts/docker-build-push.sh
+IMAGE_REPOSITORY=crpi-xjd40982wqk3bdon-vpc.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-mcp ./scripts/docker-build-push.sh
+```
+
+脚本不会保存或输出 Docker 登录密码；生产运行容器时仍必须提供 `TVCMALL_WEBAPI_BASE_URL`。
+
 ## 配置
 
 | 变量 | 默认值 | 说明 |
