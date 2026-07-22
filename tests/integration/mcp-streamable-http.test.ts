@@ -20,18 +20,51 @@ afterEach(async () => {
 
 describe('Streamable HTTP MCP server', () => {
   it.each([
-    ['missing authorization', undefined],
-    ['Basic authorization', `Basic ${FIRST_PAT}`],
-    ['website token', 'Bearer website-token'],
-    ['invalid tmcp format', 'Bearer tmcp_v1_missing-secret.']
-  ])('rejects %s before accepting an initialize request', async (_label, authorization) => {
+    ['missing API KEY', undefined],
+    ['Bearer-prefixed API KEY', `Bearer ${FIRST_PAT}`],
+    ['website token', 'website-token'],
+    ['invalid tmcp format', 'tmcp_v1_missing-secret.']
+  ])('rejects %s before accepting an initialize request', async (_label, apiKey) => {
     const baseUrl = await startServer();
-    const response = await initialize(baseUrl, authorization);
+    const response = await initialize(baseUrl, apiKey);
     const body = await response.text();
 
     expect(response.status).toBe(401);
     expect(JSON.parse(body)).toEqual({ error: { code: 'AUTH_REQUIRED' } });
-    if (authorization) expect(body).not.toContain(authorization);
+    if (apiKey) expect(body).not.toContain(apiKey);
+  });
+
+  it('rejects the removed Authorization input and ambiguous dual credentials', async () => {
+    const baseUrl = await startServer();
+
+    const legacyResponse = await initialize(baseUrl, undefined, `Bearer ${FIRST_PAT}`);
+    expect(legacyResponse.status).toBe(401);
+    expect(await legacyResponse.json()).toEqual({ error: { code: 'AUTH_REQUIRED' } });
+
+    const ambiguousResponse = await initialize(baseUrl, FIRST_PAT, `Bearer ${SECOND_PAT}`);
+    expect(ambiguousResponse.status).toBe(401);
+    const body = await ambiguousResponse.text();
+    expect(JSON.parse(body)).toEqual({ error: { code: 'AUTH_REQUIRED' } });
+    expect(body).not.toContain(FIRST_PAT);
+    expect(body).not.toContain(SECOND_PAT);
+  });
+
+  it('rejects a duplicated TVCMALL_API_KEY header', async () => {
+    const baseUrl = await startServer();
+    const headers = new Headers({
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json'
+    });
+    headers.append('TVCMALL_API_KEY', FIRST_PAT);
+    headers.append('TVCMALL_API_KEY', FIRST_PAT);
+
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(initializeBody())
+    });
+
+    expect(response.status).toBe(401);
   });
 
   it('creates a stateful session from a valid PAT and forwards its auth context', async () => {
@@ -43,7 +76,7 @@ describe('Streamable HTTP MCP server', () => {
       }
     });
 
-    const initializeResponse = await initialize(baseUrl, `Bearer ${FIRST_PAT}`);
+    const initializeResponse = await initialize(baseUrl, FIRST_PAT);
     const sessionId = initializeResponse.headers.get('mcp-session-id');
     expect(initializeResponse.status).toBe(200);
     expect(sessionId).toBeTruthy();
@@ -73,7 +106,7 @@ describe('Streamable HTTP MCP server', () => {
     const baseUrl = await startServer({
       createMcpServer: () => new McpServer({ name: 'pat-http-test', version: '1' })
     });
-    const initializeResponse = await initialize(baseUrl, `Bearer ${FIRST_PAT}`);
+    const initializeResponse = await initialize(baseUrl, FIRST_PAT);
     const sessionId = initializeResponse.headers.get('mcp-session-id');
     expect(initializeResponse.status).toBe(200);
     expect(sessionId).toBeTruthy();
@@ -103,25 +136,30 @@ async function startServer(options: McpHttpServerOptions = {}): Promise<string> 
   return `http://127.0.0.1:${address.port}/mcp`;
 }
 
-function initialize(baseUrl: string, authorization?: string): Promise<Response> {
+function initialize(baseUrl: string, apiKey?: string, authorization?: string): Promise<Response> {
   return fetch(baseUrl, {
     method: 'POST',
     headers: {
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
-      ...(authorization ? { authorization } : {})
+      ...(apiKey !== undefined ? { TVCMALL_API_KEY: apiKey } : {}),
+      ...(authorization !== undefined ? { authorization } : {})
     },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: {
-        capabilities: {},
-        clientInfo: { name: 'test', version: '1' },
-        protocolVersion: '2024-11-05'
-      }
-    })
+    body: JSON.stringify(initializeBody())
   });
+}
+
+function initializeBody(): object {
+  return {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1' },
+      protocolVersion: '2024-11-05'
+    }
+  };
 }
 
 function requestHeaders(pat: string | undefined, sessionId: string): Record<string, string> {
@@ -129,7 +167,7 @@ function requestHeaders(pat: string | undefined, sessionId: string): Record<stri
     accept: 'application/json, text/event-stream',
     'content-type': 'application/json',
     'mcp-session-id': sessionId,
-    ...(pat ? { authorization: `Bearer ${pat}` } : {})
+    ...(pat !== undefined ? { TVCMALL_API_KEY: pat } : {})
   };
 }
 

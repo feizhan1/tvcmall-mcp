@@ -60,6 +60,7 @@ afterEach(async () => {
 interface DispatchOptions {
   server?: ReturnType<typeof createMcpHttpServer>;
   method: string;
+  apiKey?: string | string[];
   authorization?: string;
   body?: unknown;
   path?: string;
@@ -85,20 +86,45 @@ describe('createMcpHttpServer', () => {
   });
 
   it.each([
-    ['missing authorization', undefined],
-    ['Basic authorization', 'Basic tmcp_v1_token-id.secret-value'],
-    ['website token', 'Bearer website-token'],
-    ['invalid tmcp format', 'Bearer tmcp_v1_missing-secret.']
-  ])('rejects %s with a stable error that does not expose the credential', async (_label, authorization) => {
+    ['missing API KEY', undefined],
+    ['empty API KEY', ''],
+    ['duplicate API KEY', ['tmcp_v1_first.secret', 'tmcp_v1_first.secret']],
+    ['Bearer-prefixed API KEY', 'Bearer tmcp_v1_token-id.secret-value'],
+    ['website token', 'website-token'],
+    ['invalid tmcp format', 'tmcp_v1_missing-secret.']
+  ])('rejects %s with a stable error that does not expose the credential', async (_label, apiKey) => {
     const response = await dispatch({
       method: 'POST',
-      authorization,
+      apiKey,
       body: initializeRequest()
     });
 
     expect(response.status).toBe(401);
     expect(JSON.parse(response.body)).toEqual({ error: { code: 'AUTH_REQUIRED' } });
-    if (authorization) expect(response.body).not.toContain(authorization);
+    if (typeof apiKey === 'string' && apiKey) expect(response.body).not.toContain(apiKey);
+  });
+
+  it('rejects the removed Authorization input even when its PAT is valid', async () => {
+    const response = await dispatch({
+      method: 'POST',
+      authorization: 'Bearer tmcp_v1_legacy.secret-value',
+      body: initializeRequest()
+    });
+
+    expect(response.status).toBe(401);
+    expect(JSON.parse(response.body)).toEqual({ error: { code: 'AUTH_REQUIRED' } });
+  });
+
+  it('rejects ambiguous requests carrying both credential headers', async () => {
+    const response = await dispatch({
+      method: 'POST',
+      apiKey: 'tmcp_v1_current.secret-value',
+      authorization: 'Bearer tmcp_v1_legacy.secret-value',
+      body: initializeRequest()
+    });
+
+    expect(response.status).toBe(401);
+    expect(JSON.parse(response.body)).toEqual({ error: { code: 'AUTH_REQUIRED' } });
   });
 
   it('creates a stateful session from a valid PAT and keeps its fingerprint', async () => {
@@ -111,7 +137,7 @@ describe('createMcpHttpServer', () => {
     const response = await dispatch({
       server,
       method: 'POST',
-      authorization: `Bearer ${pat}`,
+      apiKey: pat,
       body: initializeRequest()
     });
 
@@ -129,7 +155,7 @@ describe('createMcpHttpServer', () => {
     const initialized = await dispatch({
       server,
       method: 'POST',
-      authorization: `Bearer ${pat}`,
+      apiKey: pat,
       body: initializeRequest()
     });
     const sessionId = initialized.headers['mcp-session-id'];
@@ -138,7 +164,7 @@ describe('createMcpHttpServer', () => {
       const response = await dispatch({
         server,
         method,
-        authorization: `Bearer ${pat}`,
+        apiKey: pat,
         sessionId,
         body: method === 'POST' ? { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} } : undefined
       });
@@ -159,14 +185,14 @@ describe('createMcpHttpServer', () => {
     const initialized = await dispatch({
       server,
       method: 'POST',
-      authorization: `Bearer ${firstPat}`,
+      apiKey: firstPat,
       body: initializeRequest()
     });
 
     const response = await dispatch({
       server,
       method,
-      authorization: pat ? `Bearer ${pat}` : undefined,
+      apiKey: pat,
       sessionId: initialized.headers['mcp-session-id'],
       body: method === 'POST' ? { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} } : undefined
     });
@@ -232,7 +258,7 @@ describe('createMcpHttpServer', () => {
     const existing = await dispatch({
       server,
       method: 'POST',
-      authorization: `Bearer ${firstPat}`,
+      apiKey: firstPat,
       sessionId: initialized.headers['mcp-session-id'],
       body: { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }
     });
@@ -279,7 +305,7 @@ describe('createMcpHttpServer', () => {
     const sessionId = initialized.headers['mcp-session-id'];
 
     await vi.advanceTimersByTimeAsync(100);
-    const expired = await dispatch({ server, method: 'POST', authorization: `Bearer ${pat}`, sessionId, body: {} });
+    const expired = await dispatch({ server, method: 'POST', apiKey: pat, sessionId, body: {} });
 
     expect(transportHarness.instances[0]?.close).toHaveBeenCalledTimes(1);
     expect(expired.status).toBe(404);
@@ -294,7 +320,7 @@ describe('createMcpHttpServer', () => {
     const sessionId = initialized.headers['mcp-session-id'];
 
     await vi.advanceTimersByTimeAsync(90);
-    const active = await dispatch({ server, method: 'POST', authorization: `Bearer ${pat}`, sessionId, body: {} });
+    const active = await dispatch({ server, method: 'POST', apiKey: pat, sessionId, body: {} });
     await vi.advanceTimersByTimeAsync(99);
 
     expect(active.status).toBe(200);
@@ -314,7 +340,7 @@ describe('createMcpHttpServer', () => {
     const rejected = await dispatch({
       server,
       method: 'POST',
-      authorization: pat ? `Bearer ${pat}` : undefined,
+      apiKey: pat,
       sessionId,
       body: {}
     });
@@ -346,7 +372,7 @@ describe('createMcpHttpServer', () => {
     });
 
     await vi.advanceTimersByTimeAsync(90);
-    const activeResponse = dispatch({ server, method: 'POST', authorization: `Bearer ${pat}`, sessionId, body: {} });
+    const activeResponse = dispatch({ server, method: 'POST', apiKey: pat, sessionId, body: {} });
     await requestStarted;
     await vi.advanceTimersByTimeAsync(1_000);
     expect(transportHarness.instances[0]?.close).not.toHaveBeenCalled();
@@ -390,7 +416,8 @@ async function dispatch(options: DispatchOptions): Promise<DispatchResult> {
   const request = Readable.from(serializedBody ? [serializedBody] : []) as IncomingMessage;
   Object.assign(request, {
     headers: {
-      ...(options.authorization ? { authorization: options.authorization } : {}),
+      ...(options.apiKey !== undefined ? { tvcmall_api_key: options.apiKey } : {}),
+      ...(options.authorization !== undefined ? { authorization: options.authorization } : {}),
       ...(options.sessionId ? { 'mcp-session-id': options.sessionId } : {})
     },
     method: options.method,
@@ -457,7 +484,7 @@ function createTestServer(options: TestServerOptions | ((authContext: RequestAut
 }
 
 function initialize(server: Server, pat: string): Promise<DispatchResult> {
-  return dispatch({ server, method: 'POST', authorization: `Bearer ${pat}`, body: initializeRequest() });
+  return dispatch({ server, method: 'POST', apiKey: pat, body: initializeRequest() });
 }
 
 function isInitializeBody(body: unknown): boolean {

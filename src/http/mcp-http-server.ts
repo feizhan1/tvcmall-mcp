@@ -111,7 +111,7 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
         return;
       }
 
-      const pat = readBearerPat(req);
+      const pat = readTvcMallApiKey(req);
       if (!pat) {
         sendHttpError(res, 401, 'AUTH_REQUIRED');
         return;
@@ -243,10 +243,11 @@ export async function startMcpHttpServer(options: McpHttpServerOptions & { host:
   return server;
 }
 
-function readBearerPat(req: IncomingMessage): string | undefined {
-  const authorization = req.headers.authorization;
-  if (!authorization?.startsWith('Bearer ')) return undefined;
-  const pat = authorization.slice('Bearer '.length).trim();
+function readTvcMallApiKey(req: IncomingMessage): string | undefined {
+  if (req.headers.authorization !== undefined) return undefined;
+  const apiKey = req.headers['tvcmall_api_key'];
+  if (typeof apiKey !== 'string') return undefined;
+  const pat = apiKey.trim();
   return pat || undefined;
 }
 
