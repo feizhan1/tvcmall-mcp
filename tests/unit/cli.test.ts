@@ -8,7 +8,7 @@ describe('formatWhoami', () => {
 
     expect(message).toBe([
       '本地 CLI 无法读取或判断远程 MCP 会话的 PAT 配置状态。',
-      '请在 MCP Client 的远程 MCP 配置中设置 Authorization: Bearer tmcp_v1_{tokenId}.{secret}。'
+      '请在 MCP Client 的远程 MCP 配置中设置 TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}。'
     ].join('\n'));
   });
 

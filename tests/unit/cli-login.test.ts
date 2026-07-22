@@ -92,7 +92,7 @@ describe('CLI PAT configuration guidance', () => {
     expect(tokenStore.session).toBeNull();
     expect(stdout.value).toBe([
       '请在 MCP Client 的远程 MCP 配置中设置以下请求头：',
-      'Authorization: Bearer tmcp_v1_{tokenId}.{secret}',
+      'TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}',
       '本地 login 命令不会读取或验证 PAT；最终有效性和权限以业务 WebApi 调用结果为准。',
       ''
     ].join('\n'));
@@ -109,7 +109,8 @@ describe('CLI PAT configuration guidance', () => {
     await runCli(['whoami'], { tokenStore, stdout, env: testEnv });
 
     expect(stdout.value).toContain('本地 CLI 无法读取或判断远程 MCP 会话的 PAT 配置状态');
-    expect(stdout.value).toContain('Authorization: Bearer tmcp_v1_{tokenId}.{secret}');
+    expect(stdout.value).toContain('TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}');
+    expect(stdout.value).not.toContain('Authorization: Bearer tmcp_v1_');
     expect(stdout.value).not.toContain('当前未登录 TVCMall');
     expect(stdout.value).not.toContain('已登录 TVCMall MCP');
     expect(stdout.value).not.toContain('当前账号');

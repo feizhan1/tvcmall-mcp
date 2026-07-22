@@ -75,7 +75,7 @@ describe('logout command', () => {
     expect(tokenStore.cleared).toBe(true);
     expect(tokenStore.session).toBeNull();
     expect(stdout.value).toContain('已清除本地 TVCMall MCP 登录状态');
-    expect(stdout.value).toContain('请从 MCP Client 的远程 MCP 配置中移除 Authorization: Bearer PAT');
+    expect(stdout.value).toContain('请从 MCP Client 的远程 MCP 配置中移除 TVCMALL_API_KEY Header');
     expect(stdout.value).not.toContain('fake-access-token-value');
     expect(stdout.value).not.toContain('fake-refresh-token-value');
   });

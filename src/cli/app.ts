@@ -55,7 +55,7 @@ export function createCli(options: CliOptions = {}): Command {
     .action(() => {
       stdout.write([
         '请在 MCP Client 的远程 MCP 配置中设置以下请求头：',
-        'Authorization: Bearer tmcp_v1_{tokenId}.{secret}',
+        'TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}',
         '本地 login 命令不会读取或验证 PAT；最终有效性和权限以业务 WebApi 调用结果为准。',
         ''
       ].join('\n'));
@@ -72,7 +72,7 @@ export function createCli(options: CliOptions = {}): Command {
       await tokenStore.clearSession();
       stdout.write([
         '已清除本地 TVCMall MCP 登录状态。',
-        '如需停用远程 PAT，请从 MCP Client 的远程 MCP 配置中移除 Authorization: Bearer PAT。',
+        '如需停用远程 PAT，请从 MCP Client 的远程 MCP 配置中移除 TVCMALL_API_KEY Header。',
         ''
       ].join('\n'));
     });
