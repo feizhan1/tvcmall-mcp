@@ -12,6 +12,53 @@ describe('runtime config', () => {
   });
 
   it.each([
+    'http://localhost:8084/api/m',
+    'http://127.0.0.2:8084/api/m',
+    'http://10.20.30.40:8084/api/m',
+    'http://172.16.0.1:8084/api/m',
+    'http://172.31.255.254:8084/api/m',
+    'http://192.168.1.16:8084/api/m',
+    'http://[::1]:8084/api/m'
+  ])('allows sandbox private HTTP WebApi URL %s', (webApiBaseUrl) => {
+    expect(loadRuntimeConfig({
+      TVCMALL_API_ENV: 'sandbox',
+      TVCMALL_WEBAPI_BASE_URL: webApiBaseUrl
+    }).webApiBaseUrl).toBe(webApiBaseUrl);
+  });
+
+  it.each(['production', 'staging'])('rejects private HTTP in %s', (apiEnv) => {
+    expect(() => loadRuntimeConfig({
+      TVCMALL_API_ENV: apiEnv,
+      TVCMALL_WEBAPI_BASE_URL: 'http://192.168.1.16:8084/api/m'
+    })).toThrow(/TVCMALL_WEBAPI_BASE_URL/);
+  });
+
+  it.each([
+    undefined,
+    'invalid'
+  ])('rejects private HTTP when the environment falls back to production: %s', (apiEnv) => {
+    expect(() => loadRuntimeConfig({
+      ...(apiEnv === undefined ? {} : { TVCMALL_API_ENV: apiEnv }),
+      TVCMALL_WEBAPI_BASE_URL: 'http://192.168.1.16:8084/api/m'
+    })).toThrow(/TVCMALL_WEBAPI_BASE_URL/);
+  });
+
+  it.each([
+    'http://example.com/api/m',
+    'http://localhost.example.com/api/m',
+    'http://8.8.8.8/api/m',
+    'http://169.254.169.254/api/m',
+    'http://100.64.0.1/api/m',
+    'http://172.15.255.255/api/m',
+    'http://172.32.0.1/api/m'
+  ])('rejects sandbox HTTP outside the explicit private allowlist: %s', (webApiBaseUrl) => {
+    expect(() => loadRuntimeConfig({
+      TVCMALL_API_ENV: 'sandbox',
+      TVCMALL_WEBAPI_BASE_URL: webApiBaseUrl
+    })).toThrow(/TVCMALL_WEBAPI_BASE_URL/);
+  });
+
+  it.each([
     'https://webapi.tvcmall.test/api/m?secret=query-value',
     'https://webapi.tvcmall.test/api/m#secret-fragment',
     'https://webapi.test/api/m?',
@@ -29,7 +76,7 @@ describe('runtime config', () => {
   });
 
   it('rejects WebApi URL userinfo without exposing credentials or the original URL', () => {
-    const webApiBaseUrl = 'https://user:password@webapi.tvcmall.test';
+    const webApiBaseUrl = 'https://mcp-user:top-secret@webapi.tvcmall.test';
     let error: unknown;
     try {
       loadRuntimeConfig({ TVCMALL_WEBAPI_BASE_URL: webApiBaseUrl });
@@ -37,10 +84,30 @@ describe('runtime config', () => {
       error = caught;
     }
 
-    expect(error).toMatchObject({ message: 'TVCMALL_WEBAPI_BASE_URL must be an HTTPS URL' });
-    expect(String(error)).not.toContain('user');
-    expect(String(error)).not.toContain('password');
+    expect(error).toMatchObject({ message: 'TVCMALL_WEBAPI_BASE_URL must not include userinfo' });
+    expect(String(error)).not.toContain('mcp-user');
+    expect(String(error)).not.toContain('top-secret');
     expect(String(error)).not.toContain(webApiBaseUrl);
+  });
+
+  it.each([
+    'http://192.168.1.16:8084/api/m?secret=value',
+    'http://192.168.1.16:8084/api/m#secret',
+    'http://user:password@192.168.1.16:8084/api/m'
+  ])('rejects unsafe sandbox HTTP without exposing it: %s', (webApiBaseUrl) => {
+    let error: unknown;
+    try {
+      loadRuntimeConfig({
+        TVCMALL_API_ENV: 'sandbox',
+        TVCMALL_WEBAPI_BASE_URL: webApiBaseUrl
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).not.toContain(webApiBaseUrl);
+    expect(String(error)).not.toContain('password');
   });
 
   it('loads WebApi settings and ignores removed verification service variables', () => {

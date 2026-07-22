@@ -33,7 +33,7 @@ export const DEFAULT_RUNTIME_CONFIG = {
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMallRuntimeConfig {
   const apiEnv = readEnum(env.TVCMALL_API_ENV, API_ENV_VALUES) ?? DEFAULT_RUNTIME_CONFIG.apiEnv;
   return {
-    webApiBaseUrl: readWebApiBaseUrl(env.TVCMALL_WEBAPI_BASE_URL),
+    webApiBaseUrl: readWebApiBaseUrl(env.TVCMALL_WEBAPI_BASE_URL, apiEnv),
     apiTimeoutMs: readApiTimeoutMs(env.TVCMALL_API_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiTimeoutMs,
     apiEnv,
     logLevel: readEnum(env.TVCMALL_LOG_LEVEL, LOG_LEVEL_VALUES) ?? DEFAULT_RUNTIME_CONFIG.logLevel,
@@ -70,22 +70,42 @@ function readMcpPath(value: string | undefined): string | undefined {
   return path.length > 1 ? path.replace(/\/+$/, '') : path;
 }
 
-function readWebApiBaseUrl(value: string | undefined): string {
+function readWebApiBaseUrl(value: string | undefined, apiEnv: TvcMallApiEnv): string {
   const url = readString(value);
-  if (!url) throw new Error('TVCMALL_WEBAPI_BASE_URL must be explicitly configured as an HTTPS URL');
+  if (!url) throw new Error('TVCMALL_WEBAPI_BASE_URL must be explicitly configured');
 
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error('TVCMALL_WEBAPI_BASE_URL must be a valid HTTPS URL');
+    throw new Error('TVCMALL_WEBAPI_BASE_URL must be a valid URL');
   }
 
   if (/[?#]/.test(url)) {
     throw new Error('TVCMALL_WEBAPI_BASE_URL must not include query parameters or fragments');
   }
-  if (parsed.protocol === 'https:' && !parsed.username && !parsed.password) return url;
-  throw new Error('TVCMALL_WEBAPI_BASE_URL must be an HTTPS URL');
+  if (parsed.username || parsed.password) {
+    throw new Error('TVCMALL_WEBAPI_BASE_URL must not include userinfo');
+  }
+  if (parsed.protocol === 'https:') return url;
+  if (apiEnv === 'sandbox' && parsed.protocol === 'http:' && isSandboxHttpHost(parsed.hostname)) return url;
+  throw new Error('TVCMALL_WEBAPI_BASE_URL must use HTTPS unless sandbox targets loopback or RFC1918');
+}
+
+function isSandboxHttpHost(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '[::1]') return true;
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return false;
+
+  const octets = hostname.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false;
+  }
+
+  const [first, second] = octets;
+  return first === 127
+    || first === 10
+    || (first === 172 && second !== undefined && second >= 16 && second <= 31)
+    || (first === 192 && second === 168);
 }
 
 function readEnum<T extends readonly string[]>(value: string | undefined, allowedValues: T): T[number] | undefined {
