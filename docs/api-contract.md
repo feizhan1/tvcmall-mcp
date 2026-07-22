@@ -1,11 +1,11 @@
 # TVCMall Customer MCP v0.1 API 契约
 
-本文定义远程 Streamable HTTP MCP 的 PAT header、session、MCP tools、现有 TVCMall WebApi routes、scope/allowlist、输出摘要和稳定错误码。WebApi 授权实现以根目录 `tvcmall-webapi mcp开发接入说明文档.md` 为准。
+本文定义远程 Streamable HTTP MCP 的 API KEY/PAT header、session、MCP tools、现有 TVCMall WebApi routes、scope/allowlist、输出摘要和稳定错误码。WebApi 授权实现以根目录 `tvcmall-webapi mcp开发接入说明文档.md` 为准。
 
 ## 1. 契约原则
 
-- MCP Client 在每个 `/mcp` 请求发送 `Authorization: Bearer tmcp_v1_{tokenId}.{secret}`。
-- MCP HTTP 层只校验 Bearer/PAT 基本格式、请求 schema、session 指纹、容量与 idle TTL。
+- MCP Client 在每个 `/mcp` 请求发送 `TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}`；入站 `Authorization` 不受支持。
+- MCP HTTP 层只校验 API KEY/PAT 基本格式、请求 schema、session 指纹、容量与 idle TTL。
 - MCP 不向其他认证服务预验证 PAT、不换 token、不解析用户、scopes 或 expiry。
 - MCP 调用业务接口时使用当前 session 的同一 PAT，只添加一次 `Bearer `。
 - TVCMall WebApi → ApplicationServices → RDS 是唯一业务授权链，负责 PAT verifier、`catalog.read` / `order.read` 和 method + normalized route allowlist。
@@ -18,26 +18,27 @@
 
 | Method | Path | 用途 | 认证/session 要求 |
 | --- | --- | --- | --- |
-| `POST` | `/mcp` | `initialize`、`tools/list`、`tools/call` 等 MCP JSON-RPC | 每请求 Bearer PAT；初始化后还需 `Mcp-Session-Id` |
-| `GET` | `/mcp` | SDK 支持的流式恢复/SSE | Bearer PAT + `Mcp-Session-Id` |
-| `DELETE` | `/mcp` | 终止 session | Bearer PAT + `Mcp-Session-Id` |
+| `POST` | `/mcp` | `initialize`、`tools/list`、`tools/call` 等 MCP JSON-RPC | 每请求 `TVCMALL_API_KEY`；初始化后还需 `Mcp-Session-Id` |
+| `GET` | `/mcp` | SDK 支持的流式恢复/SSE | `TVCMALL_API_KEY` + `Mcp-Session-Id` |
+| `DELETE` | `/mcp` | 终止 session | `TVCMALL_API_KEY` + `Mcp-Session-Id` |
 | `GET` | `/healthz` | 存活检查 | 不返回配置、session 或身份信息 |
 
 除 `/healthz` 外，所有 `/mcp` 请求都必须携带 PAT。没有 session ID 的非 initialize 请求返回安全的 session/initialize 错误，不创建隐式 session。
 
-### 2.2 Authorization header
+### 2.2 TVCMALL_API_KEY header
 
 ```http
-Authorization: Bearer tmcp_v1_{tokenId}.{secret}
+TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}
 ```
 
 要求：
 
-- scheme 必须是 `Bearer`。
-- token 必须以 `tmcp_v1_` 开头，并包含非空 `{tokenId}` 与 `{secret}` 两段。
+- Header 值直接是 PAT，不带 `Bearer ` 前缀。
+- PAT 必须以 `tmcp_v1_` 开头，并包含非空 `{tokenId}` 与 `{secret}` 两段。
 - token 不能包含空白，不能是网站登录 token。
 - 基本格式通过只代表请求可建立 MCP session，不代表 PAT 已被 WebApi 验证。
 - 客户端必须在后续 `POST`、`GET`、`DELETE` 请求重复发送同一 PAT。
+- 仅发送旧入站 `Authorization: Bearer ...`，或同时发送 `TVCMALL_API_KEY` 与 `Authorization`，都返回 `401 AUTH_REQUIRED`。
 
 ### 2.3 内容协商
 
@@ -65,7 +66,7 @@ JSON-RPC 正文必须符合 MCP SDK 当前协商的 protocol version 与 schema�
 
 ```http
 Mcp-Session-Id: {session-id}
-Authorization: Bearer tmcp_v1_{tokenId}.{secret}
+TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}
 ```
 
 - session ID 必须存在，PAT 的 SHA-256 指纹必须与初始化时一致。
@@ -303,7 +304,7 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 
 | 来源 | HTTP / MCP 结果 | 稳定错误码 | 客户端提示 |
 | --- | --- | --- | --- |
-| 缺少 Bearer PAT、PAT 基本格式错误 | HTTP `401` | `AUTH_REQUIRED` | 重新配置 PAT |
+| 缺少/无效 `TVCMALL_API_KEY`，或携带入站 `Authorization` | HTTP `401` | `AUTH_REQUIRED` | 按新客户端契约重新配置 PAT |
 | WebApi `401` | tool error | `AUTH_REQUIRED` | PAT 可能无效、过期、撤销或暂不可验证 |
 | WebApi `403` | tool error | `PERMISSION_DENIED` | 检查 scope、route 登记与 enabled 状态 |
 | WebApi `429` | tool error | `RATE_LIMITED` | 稍后重试；只使用安全重试提示 |
@@ -322,7 +323,7 @@ WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/sc
 
 错误响应和 tool 文本允许包含稳定错误码与操作建议，但不得包含：
 
-- `Authorization` header 或 PAT 的任意完整片段。
+- 入站 `TVCMALL_API_KEY`、出站 `Authorization` 或 PAT 的任意完整片段。
 - WebApi 原始 response body、堆栈、内部 host 或数据库信息。
 - PAT 是否存在于 RDS、归属用户、精确过期/撤销原因。
 - 其他 session ID 或 session 数量明细。
@@ -331,7 +332,7 @@ WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/sc
 
 | 变量 | 必填 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `TVCMALL_WEBAPI_BASE_URL` | 是 | 无 | HTTPS；无 userinfo/query/fragment |
+| `TVCMALL_WEBAPI_BASE_URL` | 是 | 无 | 包含实际 WebApi 基础路径（示例 `/api`）的 HTTPS URL；无 userinfo/query/fragment |
 | `TVCMALL_API_TIMEOUT_MS` | 否 | `15000` | `1..2_147_483_647` 范围内的整数，毫秒 |
 | `TVCMALL_API_ENV` | 否 | `production` | `production` / `staging` / `sandbox` |
 | `TVCMALL_MCP_HOST` | 否 | `127.0.0.1` | 非空字符串 |
@@ -345,7 +346,7 @@ PAT 不属于 server runtime config。禁止以环境变量配置一个供所有
 
 ## 10. 安全与验收检查
 
-- [ ] PAT 格式、header、每请求发送和 session 指纹绑定有测试。
+- [ ] `TVCMALL_API_KEY` 格式、每请求发送、旧 `Authorization` 拒绝和 session 指纹绑定有测试。
 - [ ] PAT 原文仅存在于当前 session 内存，所有关闭路径均清理。
 - [ ] WebApi 请求使用相同 PAT，并只添加一次 `Bearer `。
 - [ ] WebApi URL 强制 HTTPS 且拒绝 userinfo/query/fragment。

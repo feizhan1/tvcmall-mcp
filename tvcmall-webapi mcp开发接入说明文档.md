@@ -1,16 +1,22 @@
 # TVCMall WebApi MCP 开发接入说明文档
 
-更新时间：2026-07-17
+更新时间：2026-07-22
 
 ## 1. 适用范围
 
-本文面向开发 TVCMall 远程 HTTP MCP Server 的工程人员，说明 MCP Server 调用 `tvcmall-webapi` 时的认证授权方式。
+本文面向开发 TVCMall 远程 Streamable HTTP MCP Server 的工程人员，说明 MCP Client 到 MCP Server，以及 MCP Server 调用 `tvcmall-webapi` 时的认证授权方式。
 
-本期方案只覆盖 MCP Server 到 TVCMall WebApi 的服务端调用授权，不改造 MCP 协议本身，不新增 OAuth Gateway，不新增独立 OAuth 服务，也不改变 TVCMall PC/Mobile/SSR 当前网站登录流程。
+本期方案不改造 MCP 协议本身，不新增 OAuth Gateway，不新增独立 OAuth 服务，也不改变 TVCMall PC/Mobile/SSR 当前网站登录流程。MCP Client 使用自定义 Header 提交每个用户独立的 PAT；MCP Server 再按 WebApi 既有 Bearer 规范调用 API。
 
 ## 2. 接入结论
 
-MCP Server 接入 TVCMall WebApi 时使用 TVCMall 签发的 PAT（Personal Access Token）：
+每个 MCP Client 使用 TVCMall 为当前用户签发的 PAT（Personal Access Token）访问 MCP Server：
+
+```http
+TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}
+```
+
+MCP Server 调用 TVCMall WebApi 时，将同一 PAT 转为：
 
 ```http
 Authorization: Bearer tmcp_v1_{tokenId}.{secret}
@@ -19,7 +25,9 @@ Authorization: Bearer tmcp_v1_{tokenId}.{secret}
 核心规则：
 
 - MCP Server 不使用 OAuth，不使用网站用户名密码，不直接访问 ApplicationServices 或 RDS。
-- Agent Client 只需要配置 PAT；MCP Server 从安全配置读取 PAT 后调用现有 WebApi URL。
+- Agent Client 在每个 `/mcp` 请求的 `TVCMALL_API_KEY` Header 中发送当前用户的 PAT；每个用户使用不同 PAT。
+- MCP Server 只从当前 MCP session 内存读取 PAT，不配置或读取供所有用户共享的 PAT。
+- MCP Server 只调用现有 WebApi URL；TVCMall WebApi、ApplicationServices 和 RDS 都是本仓库之外的现有系统，本仓库不实现它们。
 - WebApi 优先识别 `tmcp_v1_` Bearer PAT，调用 ApplicationServices 做 PAT 校验和 route-scope 授权。
 - 授权通过后，WebApi 继续执行原有业务 API，返回值保持现有 API 原样，不做 MCP 格式包装。
 - 授权失败时，不进入业务 action，由 WebApi 直接返回 `401` 或 `403`。
@@ -30,8 +38,8 @@ Authorization: Bearer tmcp_v1_{tokenId}.{secret}
 
 | 角色 | 职责 | 不做什么 |
 | --- | --- | --- |
-| Agent Client | 保存用户配置的 MCP Server 地址和 PAT | 不理解 TVCMall 网站 token，不直接访问 WebApi |
-| MCP Server | 根据 MCP tool 调用现有 TVCMall WebApi，并透传 PAT | 不创建 OAuth 流程，不直连 RDS，不保存 PAT verifier |
+| Agent Client | 保存用户配置的 MCP Server 地址和当前用户 PAT；每请求发送 `TVCMALL_API_KEY` | 不理解 TVCMall 网站 token，不直接访问 WebApi |
+| MCP Server | 从当前 session 读取 PAT，根据 MCP tool 调用现有 TVCMall WebApi | 不创建 OAuth 流程，不直连 RDS，不保存 PAT verifier，不使用共享 PAT |
 | TVCMall WebApi | 识别 PAT、调用 ApplicationServices 校验、写入请求用户上下文、执行现有 API | 不保存 pepper，不直连 MCP PAT RDS 表 |
 | ApplicationServices | 验证 PAT，校验 route-scope allowlist | 不改变网站登录流程 |
 | RDS | 保存 PAT 元数据、verifier、scope、route allowlist | 不保存 PAT 明文 secret |
@@ -45,7 +53,17 @@ Authorization: Bearer tmcp_v1_{tokenId}.{secret}
 
 ## 4. 请求 Header 规范
 
-### 4.1 必填 Header
+### 4.1 MCP Client 到 MCP Server
+
+除无需认证的 `GET /healthz` 外，每个 `POST`、`GET` 和 `DELETE /mcp` 请求都必须携带：
+
+```http
+TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}
+```
+
+初始化成功后的请求还必须携带服务端返回的 `Mcp-Session-Id`，并继续发送同一 PAT。MCP 入站不接受 `Authorization` Header；仅发送旧的 `Authorization: Bearer ...`，或同时发送两种凭据，均返回 `401 AUTH_REQUIRED`。
+
+### 4.2 MCP Server 到 WebApi
 
 MCP Server 请求 WebApi 时必须带 PAT：
 
@@ -61,7 +79,7 @@ Authorization: Bearer tmcp_v1_{tokenId}.{secret}
 - `{tokenId}` 是公开 token 标识，`{secret}` 是只出现一次的密钥部分。
 - 不能使用普通网站登录 token 冒充 MCP PAT。
 
-### 4.2 内容 Header
+### 4.3 内容 Header
 
 按现有 WebApi 接口要求设置：
 
@@ -72,7 +90,7 @@ Content-Type: application/json
 
 GET 接口通常不需要 `Content-Type`；POST/PUT/PATCH 接口按现有 API body 格式设置。
 
-### 4.3 来源标识 Header
+### 4.4 来源标识 Header
 
 本期授权不依赖来源标识 Header，授权只看 PAT、scope 和 route-scope allowlist。
 
@@ -99,7 +117,8 @@ sequenceDiagram
     participant App as ApplicationServices
     participant RDS as RDS
 
-    Agent->>MCP: 调用 MCP tool
+    Agent->>MCP: /mcp + TVCMALL_API_KEY: tmcp_v1_...
+    MCP->>MCP: 格式校验并绑定 Mcp-Session-Id
     MCP->>WebApi: 请求现有 API，Authorization: Bearer tmcp_v1_...
     WebApi->>WebApi: 识别 MCP PAT
     WebApi->>App: McpPat/Validate(rawToken, method, url)
@@ -174,13 +193,13 @@ Accept: application/json
 ### 6.5 MCP Server 代码伪例
 
 ```ts
-async function callTvcmallWebApi(path: string, init: RequestInit = {}) {
+async function callTvcmallWebApi(pat: string, path: string, init: RequestInit = {}) {
   const response = await fetch(`${process.env.TVCMALL_WEBAPI_BASE_URL}${path}`, {
     ...init,
     headers: {
       Accept: 'application/json',
       ...(init.headers || {}),
-      Authorization: `Bearer ${process.env.TVCMALL_MCP_PAT}`,
+      Authorization: `Bearer ${pat}`,
       'X-TVCMall-MCP-Client': 'tvcmall-mcp-server'
     }
   });
@@ -286,8 +305,9 @@ HTTP Method + normalized_route -> required_scope
 
 ## 10. 安全要求
 
-- MCP Server 必须通过密钥管理、环境变量或部署平台 secret 保存 PAT，不能写入代码仓库。
-- 日志、异常、链路追踪中必须脱敏 `Authorization` 和 `tmcp_v1_` token。
+- 每个用户的 PAT 由 MCP Client 提供，只能短暂保存在对应 MCP session 的进程内存中；MCP Server 不使用环境变量或部署 secret 配置共享 PAT。
+- 日志、异常、链路追踪中必须脱敏入站 `TVCMALL_API_KEY`、出站 `Authorization` 和 `tmcp_v1_` token。
+- `DELETE /mcp`、transport `onclose`、idle TTL、initialize 失败或 server close 后必须清理 session PAT 与指纹。
 - MCP Server 到 WebApi 必须使用 HTTPS。
 - 不要把 PAT 发送给除 TVCMall WebApi 之外的任何下游服务。
 - 不要在 MCP Server 中保存 `mcp_pat_pepper`；pepper 只属于 ApplicationServices。
@@ -300,10 +320,12 @@ HTTP Method + normalized_route -> required_scope
 开发一个新的 MCP tool 前，逐项确认：
 
 - 已确定调用的现有 WebApi URL、HTTP method、请求参数和现有返回结构。
+- MCP Client 在每个 `/mcp` 请求中发送 `TVCMALL_API_KEY: tmcp_v1_...`，且不发送入站 `Authorization`。
 - 目标 route 已登记到 RDS `mcp_route_scope_allowlist`。
 - route 要求的 scope 属于本期支持范围：`catalog.read` 或 `order.read`。
 - 测试 PAT 已包含目标 route 要求的 scope。
 - MCP Server 请求中带 `Authorization: Bearer tmcp_v1_...`。
+- MCP Server 从当前 session 读取 PAT，而不是从共享环境变量或部署 secret 读取。
 - MCP Server 未把普通网站 token 当成 MCP PAT 使用。
 - MCP Server 未直接调用 ApplicationServices 或 RDS。
 - WebApi 返回 `401`、`403` 时 MCP Server 有清晰错误提示。

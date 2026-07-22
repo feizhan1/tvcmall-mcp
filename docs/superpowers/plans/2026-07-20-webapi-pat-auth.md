@@ -1,5 +1,7 @@
 # WebApi PAT Authorization Implementation Plan
 
+> 状态：历史归档。本文对应的 WebApi PAT 改造已经执行完成，客户端入站 Header 已由 `docs/superpowers/specs/2026-07-22-tvcmall-api-key-header-design.md` 取代；本文不得作为当前实施入口。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将远程 Streamable HTTP MCP 改为接收 `tmcp_v1_` PAT，并把同一 PAT 直接传给现有 TVCMall WebApi。

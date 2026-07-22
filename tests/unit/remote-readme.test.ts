@@ -14,6 +14,14 @@ const remoteDesign = readFileSync(
   'docs/superpowers/specs/2026-07-13-remote-streamable-http-mcp-design.md',
   'utf8',
 );
+const authorityDoc = readFileSync(
+  'tvcmall-webapi mcp开发接入说明文档.md',
+  'utf8',
+);
+const currentHeaderDesign = readFileSync(
+  'docs/superpowers/specs/2026-07-22-tvcmall-api-key-header-design.md',
+  'utf8',
+);
 
 const currentDocs = readDocs([
   'README.md',
@@ -22,10 +30,8 @@ const currentDocs = readDocs([
   'docs/mvp-scope.md',
   'docs/harness.md',
   'docs/remote-streamable-http-mcp-architecture.md',
-  'docs/superpowers/specs/2026-07-13-remote-streamable-http-mcp-design.md',
-  'docs/superpowers/plans/2026-07-13-remote-streamable-http-mcp.md',
-  'docs/superpowers/specs/2026-07-20-webapi-pat-auth-design.md',
-  'docs/superpowers/plans/2026-07-20-webapi-pat-auth.md',
+  'docs/superpowers/specs/2026-07-22-tvcmall-api-key-header-design.md',
+  'tvcmall-webapi mcp开发接入说明文档.md',
 ]);
 
 describe('remote Streamable HTTP documentation', () => {
@@ -33,6 +39,7 @@ describe('remote Streamable HTTP documentation', () => {
     for (const document of [readme, apiContract, architecture]) {
       for (const term of [
         'Streamable HTTP',
+        'TVCMALL_API_KEY',
         'Authorization: Bearer',
         'tmcp_v1_{tokenId}.{secret}',
         'Mcp-Session-Id',
@@ -47,6 +54,28 @@ describe('remote Streamable HTTP documentation', () => {
     }
   });
 
+  it('separates inbound API KEY from outbound WebApi Authorization', () => {
+    for (const document of [readme, apiContract, architecture, authorityDoc]) {
+      expect(document).toContain('TVCMALL_API_KEY');
+      expect(document).toContain('Authorization: Bearer');
+      expect(document).toContain('tmcp_v1_{tokenId}.{secret}');
+    }
+    expect(authorityDoc).not.toContain('process.env.TVCMALL_MCP_PAT');
+    expect(currentDocs).not.toContain('Bearer ${TVCMALL_MCP_PAT}');
+    expect(currentHeaderDesign).toContain('不兼容旧客户端');
+  });
+
+  it('marks superseded specifications and plans as archived', () => {
+    for (const path of [
+      'docs/superpowers/specs/2026-07-13-remote-streamable-http-mcp-design.md',
+      'docs/superpowers/specs/2026-07-20-webapi-pat-auth-design.md',
+      'docs/superpowers/plans/2026-07-13-remote-streamable-http-mcp.md',
+      'docs/superpowers/plans/2026-07-20-webapi-pat-auth.md',
+    ]) {
+      expect(readFileSync(path, 'utf8')).toContain('历史归档');
+    }
+  });
+
   it('contains architecture and data-flow diagrams with session and error semantics', () => {
     expect(architecture).toContain('## 2. 技术架构图');
     expect(architecture).toContain('## 5. 数据流转图');
@@ -54,6 +83,7 @@ describe('remote Streamable HTTP documentation', () => {
     for (const term of [
       'flowchart',
       'sequenceDiagram',
+      'TVCMALL_API_KEY',
       'Authorization: Bearer',
       'tools/list',
       'tools/call',

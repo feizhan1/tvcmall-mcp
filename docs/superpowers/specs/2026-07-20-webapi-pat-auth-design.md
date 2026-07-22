@@ -1,5 +1,7 @@
 # TVCMall WebApi PAT 授权改造设计
 
+> 状态：历史归档。当前客户端入站认证以 `docs/superpowers/specs/2026-07-22-tvcmall-api-key-header-design.md` 和公开 API 契约为准；本文不得作为当前实施入口。
+
 ## 目标
 
 以仓库根目录的 `tvcmall-webapi mcp开发接入说明文档.md` 为唯一授权契约，将远程 Streamable HTTP MCP 从“API Key 验证接口换取短期 token”改为“客户端 PAT 透传到 TVCMall WebApi”。

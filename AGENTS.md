@@ -22,12 +22,12 @@
 
 ## 4. 认证与安全边界
 
-- MCP Client 必须在每个远程 `/mcp` 请求中携带 `Authorization: Bearer tmcp_v1_{tokenId}.{secret}`，不得使用网站用户名密码、OAuth token 或服务器共享 PAT。
-- MCP HTTP 层只做 Bearer/PAT 基本格式、请求 schema、SHA-256 session 指纹绑定、容量和 idle TTL 控制；不得自行判断用户、scope、过期时间或调用独立验证服务。
+- MCP Client 必须在每个远程 `/mcp` 请求中携带 `TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}`，不得发送入站 `Authorization`，也不得使用网站用户名密码、OAuth token 或服务器共享 PAT。
+- MCP HTTP 层只做 API KEY/PAT 基本格式、请求 schema、SHA-256 session 指纹绑定、容量和 idle TTL 控制；不得自行判断用户、scope、过期时间或调用独立验证服务。
 - 调用业务接口时原样使用当前 session 的 PAT，只增加一次 `Bearer ` 前缀，并且只发送给 `TVCMALL_WEBAPI_BASE_URL` 下的现有 WebApi route。
 - MCP Server 不直连 ApplicationServices 或 RDS。WebApi → ApplicationServices → RDS 负责 PAT verifier、`catalog.read` / `order.read`、method + normalized route allowlist 和业务权限。
 - PAT 原文只允许存在于当前 MCP session 的内存认证上下文；SHA-256 指纹只用于同 session 比对。`DELETE /mcp`、transport `onclose`、idle TTL 或 server close 后必须清理。
-- 禁止把 PAT、`Authorization`、密码、完整地址、电话等敏感信息打印到日志、异常、HTTP 响应或 MCP tool 输出。
+- 禁止把 PAT、入站 `TVCMALL_API_KEY`、出站 `Authorization`、密码、完整地址、电话等敏感信息打印到日志、异常、HTTP 响应或 MCP tool 输出。
 - 订单详情和物流信息涉及 PII 时，必须遵循 WebApi 后端权限与脱敏策略。
 - stdout 纯协议约束只适用于内部 stdio harness；远程生产入口使用 HTTP，应用日志仍必须结构化、脱敏并与协议响应分离。
 
@@ -95,7 +95,7 @@ tvcmall-mcp/
 
 - 修改代码时优先补充或更新测试；至少运行与本次修改相关的单元测试或集成测试。
 - 涉及 Streamable HTTP 的改动，必须覆盖 `initialize`、`Mcp-Session-Id`、后续 `POST` / `GET` / `DELETE`、PAT 不可替换、最大 session 数和 idle TTL 清理。
-- 涉及认证、HTTP header、日志或异常的改动，必须断言 PAT 不会出现在日志、错误正文、tool 输出和测试快照中。
+- 涉及认证、HTTP header、日志或异常的改动，必须断言 `TVCMALL_API_KEY`、PAT 和下游 `Authorization` 不会出现在日志、错误正文、tool 输出和测试快照中。
 - 涉及 WebApi client 的改动，必须验证 PAT 原样且只加一次 `Bearer `，并验证稳定的 `401` / `403` / `429` / `5xx` 错误映射。
 - 涉及 harness、fixtures、tool 注册或 fake client 的改动，优先保持业务行为不变，并同步维护 `docs/harness.md`。
 - 内部 stdio harness 只用于协议与 tool 回归，不能作为客户认证、安装或生产部署入口；其 stdout 不得被普通日志污染。

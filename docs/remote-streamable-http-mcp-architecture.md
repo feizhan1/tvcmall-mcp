@@ -2,7 +2,7 @@
 
 本文是 TVCMall Customer MCP v0.1 的远程部署、认证授权、会话与数据流参考。MCP 调用 WebApi 的授权细节以根目录 `tvcmall-webapi mcp开发接入说明文档.md` 为准。
 
-唯一授权链路是：MCP Client 在每个远程 `/mcp` 请求携带 `Authorization: Bearer tmcp_v1_{tokenId}.{secret}`；MCP Server 仅做基本边界控制，再以同一 PAT 调用现有 TVCMall WebApi route；WebApi → ApplicationServices → RDS 完成 PAT verifier、scope 和 route allowlist 授权。链路中没有独立认证服务或 token exchange。
+唯一授权链路是：MCP Client 在每个远程 `/mcp` 请求携带 `TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}`；MCP Server 仅做基本边界控制，再以 `Authorization: Bearer <PAT>` 调用现有 TVCMall WebApi route；WebApi → ApplicationServices → RDS 完成 PAT verifier、scope 和 route allowlist 授权。链路中没有独立认证服务或 token exchange。
 
 ## 1. 设计目标
 
@@ -18,11 +18,11 @@
 ```mermaid
 flowchart LR
   Client["Claude / Cursor / Codex<br/>MCP Client<br/>URL + 用户 PAT"]
-  Edge["TLS / Reverse Proxy<br/>不记录 Authorization"]
+  Edge["TLS / Reverse Proxy<br/>不记录 TVCMALL_API_KEY / Authorization"]
 
   subgraph Mcp["Remote Streamable HTTP MCP Server"]
     Router["HTTPS /mcp Router<br/>POST / GET / DELETE"]
-    Guard["边界控制<br/>Bearer/PAT 基本格式<br/>请求 schema / 容量"]
+    Guard["边界控制<br/>API KEY/PAT 基本格式<br/>请求 schema / 容量"]
     Session["Session Registry<br/>Mcp-Session-Id<br/>PAT 仅内存 + SHA-256 指纹<br/>idle TTL"]
     Tools["MCP Server + Read-only Tools<br/>参数校验 / 摘要 / 错误转换"]
     Router --> Guard --> Session --> Tools
@@ -37,8 +37,8 @@ flowchart LR
     App --> WebApi --> Action
   end
 
-  Client -->|"每个请求 HTTPS<br/>Authorization: Bearer tmcp_v1_..."| Edge --> Router
-  Tools -->|"同一 PAT，Bearer 只添加一次"| WebApi
+  Client -->|"每个请求 HTTPS<br/>TVCMALL_API_KEY: tmcp_v1_..."| Edge --> Router
+  Tools -->|"Authorization: Bearer 同一 PAT<br/>Bearer 只添加一次"| WebApi
   Action -->|"已授权、受控业务响应"| Tools
 
   NoVerifier["无独立 verifier 服务<br/>无 token exchange<br/>MCP 不直连 ApplicationServices / RDS"]
@@ -52,8 +52,8 @@ flowchart LR
 | 组件 | 职责 | 可接触的凭据 | 不允许做的事 |
 | --- | --- | --- | --- |
 | MCP Client | 保存 URL/PAT；每个 `/mcp` 请求发送 PAT 与适用的 session ID | 用户 PAT | 把 PAT 写入共享配置、仓库或对话 |
-| TLS / Reverse Proxy | TLS 终止、路由、接入限流 | 请求头短暂经过 | 记录 `Authorization` 或请求正文中的敏感数据 |
-| MCP HTTP Router | method/path、Bearer/PAT 基本格式、JSON/schema、容量控制 | 当前请求 PAT | 调用独立验证端点、解析用户/scopes/expiry |
+| TLS / Reverse Proxy | TLS 终止、路由、接入限流 | 请求头短暂经过 | 记录 `TVCMALL_API_KEY`、`Authorization` 或请求正文中的敏感数据 |
+| MCP HTTP Router | method/path、API KEY/PAT 基本格式、JSON/schema、容量控制 | 当前请求 PAT | 接收入站 `Authorization`、调用独立验证端点、解析用户/scopes/expiry |
 | Session Registry | 绑定 `Mcp-Session-Id`、PAT 指纹、transport 和 idle TTL | 原始 PAT 与 SHA-256 指纹，仅内存 | 持久化、跨 session 共享或记录 PAT/指纹 |
 | MCP Tools | 输入校验、调用 WebApi、输出摘要、错误转换 | 当前 session PAT | 本地判断 scope、直连 ApplicationServices/RDS、透出上游正文 |
 | TVCMall WebApi | 识别 PAT、建立用户上下文、执行现有 route | PAT 在认证过滤器中短暂可见 | 将 `Authorization` 继续泄漏给业务层 |
@@ -79,7 +79,7 @@ MCP session 只存在于单个进程内存。多副本部署需要在负载均�
 
 | 配置 | 要求 |
 | --- | --- |
-| `TVCMALL_WEBAPI_BASE_URL` | 必填 HTTPS；无 userinfo、query、fragment；指向现有 TVCMall WebApi 基础路径 |
+| `TVCMALL_WEBAPI_BASE_URL` | 必填 HTTPS；无 userinfo、query、fragment；包含现有 TVCMall WebApi 基础路径（示例 `/api`） |
 | `TVCMALL_API_TIMEOUT_MS` | WebApi 超时；默认 15000 ms；合法范围 `1..2_147_483_647` ms |
 | `TVCMALL_MCP_HOST` | 默认 `127.0.0.1`；生产监听范围与反向代理拓扑一致 |
 | `TVCMALL_MCP_PORT` | 默认 `3000` |
@@ -105,19 +105,20 @@ sequenceDiagram
   participant RDS as RDS
 
   Note over Client,RDS: PAT 不进入日志、异常、tool 输出或持久层；RDS 只保存 verifier/元数据
-  Client->>MCP: POST /mcp initialize + Bearer PAT
-  MCP->>MCP: 校验 Bearer/PAT 基本格式与 initialize schema
+  Client->>MCP: POST /mcp initialize + TVCMALL_API_KEY
+  MCP->>MCP: 拒绝 Authorization，校验 API KEY/PAT 与 initialize schema
   MCP->>MCP: 计算 SHA-256 指纹（不记录）
   MCP->>Session: 创建独立 transport/server，PAT 仅存 session 内存
   MCP-->>Client: initialize result + Mcp-Session-Id
 
   alt tools/list
-    Client->>MCP: POST /mcp tools/list + Mcp-Session-Id + 同一 PAT
-    MCP->>Session: 校验 session 与 PAT 指纹，刷新 idle TTL
+    Client->>MCP: POST /mcp tools/list + Mcp-Session-Id + 同一 TVCMALL_API_KEY
+    MCP->>Session: 校验 session 与 PAT 指纹，暂停 idle timer
     MCP-->>Client: 只读 tools 列表
+    MCP->>Session: 请求结束后刷新 idle TTL
   else tools/call
-    Client->>MCP: POST /mcp tools/call + Mcp-Session-Id + 同一 PAT
-    MCP->>Session: 校验 session 与 PAT 指纹，刷新 idle TTL
+    Client->>MCP: POST /mcp tools/call + Mcp-Session-Id + 同一 TVCMALL_API_KEY
+    MCP->>Session: 校验 session 与 PAT 指纹，暂停 idle timer
     MCP->>Tool: Zod 参数校验
     Tool->>WebApi: 调用现有 route + 同一 Bearer PAT
     WebApi->>App: Validate(PAT, HTTP method, normalized route)
@@ -142,10 +143,11 @@ sequenceDiagram
       WebApi--xMCP: failure
       MCP-->>Client: API_UNAVAILABLE（不透出上游正文）
     end
+    MCP->>Session: 请求结束后刷新 idle TTL
   end
 
   alt 客户端显式结束
-    Client->>MCP: DELETE /mcp + Mcp-Session-Id + 同一 PAT
+    Client->>MCP: DELETE /mcp + Mcp-Session-Id + 同一 TVCMALL_API_KEY
     MCP->>Session: close transport/server，清理 PAT 与指纹
     MCP-->>Client: session terminated
   else onclose / idle TTL / server close
@@ -157,9 +159,9 @@ sequenceDiagram
 
 ## 6. 会话生命周期
 
-1. 客户端在无 `Mcp-Session-Id` 的 `POST /mcp initialize` 中发送 PAT。
+1. 客户端在无 `Mcp-Session-Id` 的 `POST /mcp initialize` 中发送 `TVCMALL_API_KEY`；入站 `Authorization` 不受支持。
 2. MCP 校验基本格式、计算 SHA-256 指纹并创建独立 session；原始 PAT 与指纹都只在内存。
-3. 后续 `POST`、`GET`、`DELETE /mcp` 必须携带相同 PAT 和 `Mcp-Session-Id`。
+3. 后续 `POST`、`GET`、`DELETE /mcp` 必须携带相同 `TVCMALL_API_KEY` 和 `Mcp-Session-Id`。
 4. 未知 session 返回 `404 SESSION_NOT_FOUND`；PAT 指纹不一致返回 `401 AUTH_REQUIRED`，两者都不泄露归属。
 5. active request 期间暂停 idle 计时；请求结束后刷新 idle TTL。
 6. `DELETE`、transport `onclose`、idle TTL、初始化失败或 server close 都关闭 transport/MCP Server，并删除原始 PAT、指纹和 session 引用。
@@ -192,7 +194,7 @@ UPPERCASE_HTTP_METHOD + normalized_route -> required_scope
 
 | 来源 | 稳定错误 | 安全响应 |
 | --- | --- | --- |
-| MCP 请求缺少 Bearer、PAT 基本格式错误 | `AUTH_REQUIRED` | HTTP 401，不回显 header/token |
+| MCP 请求缺少/无效 `TVCMALL_API_KEY`，或携带入站 `Authorization` | `AUTH_REQUIRED` | HTTP 401，不回显 header/token |
 | WebApi `401` | `AUTH_REQUIRED` | 提示重新配置 PAT，不区分具体失效原因 |
 | WebApi `403` | `PERMISSION_DENIED` | 提示 scope/route allowlist 不足 |
 | WebApi `429` | `RATE_LIMITED` | 仅透出安全的重试提示 |
@@ -201,7 +203,7 @@ UPPERCASE_HTTP_METHOD + normalized_route -> required_scope
 
 输入 schema 由 MCP SDK 在 tool handler 前校验；不合法输入按 JSON-RPC `Invalid params`（`-32602`）拒绝，不进入 WebApi，也不属于项目的 WebApi 稳定错误码。该错误不得泄露 PAT 或堆栈。
 
-日志可记录 request ID、tool name、HTTP status、耗时、route template 与 session 计数，但不得记录 `Authorization`、PAT、PAT 指纹、完整 URL query、请求/响应正文或 PII。错误对象与 tracing attributes 也执行同一脱敏策略。
+日志可记录 request ID、tool name、HTTP status、耗时、route template 与 session 计数，但不得记录入站 `TVCMALL_API_KEY`、出站 `Authorization`、PAT、PAT 指纹、完整 URL query、请求/响应正文或 PII。错误对象与 tracing attributes 也执行同一脱敏策略。
 
 `tvcmall_auth_status` 只返回：
 
@@ -221,9 +223,9 @@ MCP Client 配置：
 {
   "mcpServers": {
     "tvcmall": {
-      "url": "https://mcp.tvcmall.com/mcp",
+      "url": "https://mcp.example.com/mcp",
       "headers": {
-        "Authorization": "Bearer ${TVCMALL_MCP_PAT}"
+        "TVCMALL_API_KEY": "tmcp_v1_{tokenId}.{secret}"
       }
     }
   }
@@ -243,11 +245,11 @@ const response = await fetch(`${webApiBaseUrl}${existingRoute}`, {
 });
 ```
 
-`session.pat` 必须是从当前 MCP 请求建立的 session 上下文读取；不能来自服务器环境变量。header 组装必须防止已有 `Bearer ` 再次加前缀。
+示例 URL 由部署方替换；真实 PAT 应由 MCP Client secret 管理能力注入。`session.pat` 必须从当前 MCP 请求建立的 session 上下文读取，不能来自服务器环境变量。WebApi `Authorization` 组装必须防止已有 `Bearer ` 再次加前缀。
 
 ## 10. 验收清单
 
-- [ ] 每个 `/mcp` 请求都有 Bearer PAT；初始化后还有 `Mcp-Session-Id`。
+- [ ] 每个 `/mcp` 请求都有 `TVCMALL_API_KEY`；初始化后还有 `Mcp-Session-Id`，旧入站 `Authorization` 被拒绝。
 - [ ] 缺失/格式错误 PAT、替换 PAT、未知 session 和容量超限均有测试。
 - [ ] 不同 session 使用独立 MCP Server、transport、PAT 与指纹。
 - [ ] `DELETE`、`onclose`、idle TTL、初始化失败和 server close 均清理 session。

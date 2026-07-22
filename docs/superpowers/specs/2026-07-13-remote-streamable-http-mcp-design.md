@@ -1,5 +1,7 @@
 # TVCMall 远程 Streamable HTTP MCP 最终设计
 
+> 状态：历史归档。当前客户端入站认证以 `docs/superpowers/specs/2026-07-22-tvcmall-api-key-header-design.md` 和公开 API 契约为准；本文不得作为当前实施入口。
+
 > 本文最初用于讨论远程化方案，现已按 2026-07-20 确认的 WebApi PAT 契约更新为最终设计。授权细节以仓库根目录 `tvcmall-webapi mcp开发接入说明文档.md` 为准。
 
 ## 目标

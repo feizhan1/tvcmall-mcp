@@ -6,7 +6,7 @@
 
 - 用户对象：TVCMall 客户、采购商、分销商和店铺运营人员。
 - 使用方式：MCP Client 连接 TVCMall 托管的 HTTPS `/mcp` Streamable HTTP 服务。
-- 认证方式：客户在 MCP Client 配置 TVCMall PAT；每个请求发送 `Authorization: Bearer tmcp_v1_{tokenId}.{secret}`。
+- 认证方式：客户在 MCP Client 配置每用户 TVCMall PAT；每个请求发送 `TVCMALL_API_KEY: tmcp_v1_{tokenId}.{secret}`，不兼容旧入站 `Authorization`。
 - 第一版性质：远程、多 session、只读 MCP；不要求客户安装 Node.js、npm 包或登录 CLI。
 
 ## 2. 核心场景
@@ -32,10 +32,10 @@
 
 ```text
 MCP Client
-  -> HTTPS /mcp Streamable HTTP + 每请求 Bearer PAT
+  -> HTTPS /mcp Streamable HTTP + 每请求 TVCMALL_API_KEY
 Remote TVCMall MCP Server
   -> PAT 基本格式 / session 指纹 / schema / error mapping
-Existing TVCMall WebApi routes + 同一 Bearer PAT
+Existing TVCMall WebApi routes + Authorization: Bearer 同一 PAT
   -> WebApi / ApplicationServices / RDS 完成 PAT 与 route-scope 授权
 ```
 
@@ -62,7 +62,7 @@ Existing TVCMall WebApi routes + 同一 Bearer PAT
 | `tvcmall_get_tracking_info` | 查询单个订单物流和运费 | 订单号必填 |
 | `tvcmall_batch_get_tracking` | 批量查询物流 | 每次最多 50 个订单号 |
 | `tvcmall_get_points` | 查询积分汇总 | 只读 |
-| `tvcmall_list_point_records` | 查询积分记录 | 分页，单页最多 50 条 |
+| `tvcmall_list_point_records` | 查询积分记录 | 分页，单页最多 50 条；`/api/v3/user/points/list` 投产前需登记 `order.read` allowlist |
 
 ### 不包含
 
@@ -90,7 +90,7 @@ Existing TVCMall WebApi routes + 同一 Bearer PAT
 ### 阶段 1：远程 HTTP 与 session
 
 - 使用 MCP SDK `StreamableHTTPServerTransport` 提供 `POST` / `GET` / `DELETE /mcp`。
-- 初始化时校验 Bearer/PAT 基本格式并创建 session。
+- 初始化时校验 `TVCMALL_API_KEY` 中的 PAT 基本格式并创建 session；拒绝入站 `Authorization`。
 - 使用 SHA-256 指纹绑定 `Mcp-Session-Id`，拒绝在既有 session 替换 PAT。
 - 实现最大 session 数、idle TTL、transport `onclose` 和 server close 清理。
 
@@ -112,7 +112,7 @@ Existing TVCMall WebApi routes + 同一 Bearer PAT
 
 - 使用伪 PAT 和 stub WebApi 完成自动化 HTTP 集成测试。
 - 在受控 staging 使用 secret 注入执行真实 WebApi smoke test。
-- 部署到 TLS 终止层后，关闭 `Authorization` 日志并配置告警。
+- 部署到 TLS 终止层后，关闭入站 `TVCMALL_API_KEY` 与出站 `Authorization` 日志并配置告警。
 - 先对少量 PAT 灰度，观察 401/403/429/5xx、session 容量和延迟。
 
 ## 7. 验收标准
@@ -120,7 +120,7 @@ Existing TVCMall WebApi routes + 同一 Bearer PAT
 MVP 完成标准：
 
 1. MCP Client 仅配置远程 URL 与 PAT 即可完成 `initialize`、`tools/list` 和 `tools/call`。
-2. 缺失、非 Bearer 或基本格式错误的 PAT 返回 `401 AUTH_REQUIRED`，且响应与日志不含 PAT。
+2. 缺失、带 `Bearer ` 前缀或基本格式错误的 `TVCMALL_API_KEY`，以及旧入站 `Authorization`，均返回 `401 AUTH_REQUIRED`，且响应与日志不含 PAT。
 3. 同一 `Mcp-Session-Id` 只能使用初始化时的 PAT；不同 session 不共享认证上下文。
 4. MCP 以相同 PAT 调用现有 WebApi route，不新增专用业务 route，也不访问 ApplicationServices/RDS。
 5. 商品、订单、物流、运费和积分的只读 tools 返回摘要与 schema 约束结果。
@@ -134,7 +134,7 @@ MVP 完成标准：
 
 | 风险 | 缓解 |
 | --- | --- |
-| PAT 泄漏 | 客户端 secret 管理；代理与应用不记录 `Authorization`；错误、tool 输出和 fixtures 禁止出现真实 PAT |
+| PAT 泄漏 | 客户端 secret 管理；代理与应用不记录 `TVCMALL_API_KEY` 或出站 `Authorization`；错误、tool 输出和 fixtures 禁止出现真实 PAT |
 | session 混淆 | 每 session 独立 transport/Server；PAT SHA-256 指纹绑定；容量和 idle TTL |
 | MCP 误判权限 | MCP 不解析 scopes；所有业务请求交给 WebApi route-scope 授权 |
 | route 配置漂移 | 新 tool 上线前核对 HTTP method、normalized route、scope 与 allowlist enabled 状态 |

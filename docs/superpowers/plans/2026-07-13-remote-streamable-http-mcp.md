@@ -1,5 +1,7 @@
 # 远程 Streamable HTTP MCP 计划索引（最终 PAT 模型）
 
+> 状态：历史归档。当前客户端入站认证以 `docs/superpowers/specs/2026-07-22-tvcmall-api-key-header-design.md` 和公开 API 契约为准；本文不得作为当前实施入口。
+
 > 本文件是 2026-07-13 远程化计划的历史入口。远程传输方向保留，但早期独立认证与短期 token 交换假设已废弃；实现统一执行 `docs/superpowers/plans/2026-07-20-webapi-pat-auth.md`。
 
 ## 最终目标
@@ -17,7 +19,9 @@ WebApi → ApplicationServices → RDS 负责 PAT verifier、`catalog.read` / `o
 ## 执行入口
 
 - 最终授权设计：`docs/superpowers/specs/2026-07-20-webapi-pat-auth-design.md`
-- 当前实施计划：`docs/superpowers/plans/2026-07-20-webapi-pat-auth.md`
+- 历史 PAT 实施计划：`docs/superpowers/plans/2026-07-20-webapi-pat-auth.md`
+- 当前 Header 设计：`docs/superpowers/specs/2026-07-22-tvcmall-api-key-header-design.md`
+- 当前 Header 实施计划：`docs/superpowers/plans/2026-07-22-tvcmall-api-key-header.md`
 - 公开技术架构：`docs/remote-streamable-http-mcp-architecture.md`
 - API 契约：`docs/api-contract.md`
 - 权威 WebApi 接入说明：`tvcmall-webapi mcp开发接入说明文档.md`

@@ -59,9 +59,9 @@ tool 层不得从 PAT 推断用户或 scopes，也不得以本地权限列表代
 
 远程协议测试至少覆盖：
 
-- `POST /mcp` initialize 要求 `Authorization: Bearer tmcp_v1_...`。
+- `POST /mcp` initialize 要求 `TVCMALL_API_KEY: tmcp_v1_...`；旧入站 `Authorization` 和双凭据请求必须被拒绝。
 - 初始化响应返回 `Mcp-Session-Id`；后续 `POST`、`GET`、`DELETE` 必须携带该 ID 和同一 PAT。
-- 缺失、格式错误或替换 PAT 返回安全的 `AUTH_REQUIRED`，响应不包含任一 PAT。
+- 缺失、格式错误或替换 `TVCMALL_API_KEY` 返回安全的 `AUTH_REQUIRED`，响应不包含任一 PAT。
 - 未知、已删除、idle TTL 过期或 server close 后的 session 不可继续使用。
 - 最大 session 容量包含并发初始化，达到上限后稳定拒绝新 session。
 - `tools/list` 不暴露写操作或文件型能力；`tools/call` 只返回摘要与受控 structured content。
@@ -92,7 +92,7 @@ npm test -- tests/integration/mcp-stdio.test.ts
 
 - base URL 来自 `TVCMALL_WEBAPI_BASE_URL`，只允许 HTTPS 且无 userinfo/query/fragment。
 - URL 使用现有 TVCMall WebApi route，不创建 MCP 专用业务 route。
-- 当前 session PAT 原样进入 `Authorization`，且 `Bearer ` 只增加一次。
+- 当前 session PAT 原样进入 WebApi `Authorization: Bearer <PAT>`，且 `Bearer ` 只增加一次。
 - request schema、分页和批量上限与 tool 契约一致。
 - WebApi 响应先转换为受控领域对象，再由 tool 生成摘要；不透传超大原始正文。
 - `401`、`403`、`429`、`5xx`、网络、超时和 body read failure 映射到稳定错误码，且错误不包含响应正文或 PAT。
@@ -106,7 +106,7 @@ npm test -- tests/integration/mcp-stdio.test.ts
 1. 由 CI 或受控 shell secret 注入 staging MCP URL 与测试 PAT，不写入仓库文件。
 2. 使用专用、最小 scope、可撤销的测试 PAT，禁止复用生产客户 PAT。
 3. 只调用 allowlist 中的只读 route，并限制请求数量和返回数据范围。
-4. 捕获日志前确认代理、HTTP client 和测试 runner 会过滤 `Authorization`。
+4. 捕获日志前确认代理、HTTP client 和测试 runner 会过滤入站 `TVCMALL_API_KEY` 与出站 `Authorization`。
 5. 测试结束立即销毁 MCP session；PAT 轮换或撤销由 TVCMall 后端流程负责。
 
 真实集成至少验证一次 `catalog.read` 和一次 `order.read`；它用于确认 WebApi → ApplicationServices → RDS 的最终授权，不用于扩展 MCP 本地权限逻辑。
