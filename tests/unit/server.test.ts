@@ -66,7 +66,8 @@ describe('createTvcMallMcpServer', () => {
     expect(JSON.stringify(registeredTools)).not.toContain('使用假数据');
   });
 
-  it('does not expose the removed project validation error code', () => {
+  it('does not expose removed validation or token-refresh error codes', () => {
     expect(MCP_ERROR_MESSAGES).not.toHaveProperty(['VALIDATION', 'ERROR'].join('_'));
+    expect(MCP_ERROR_MESSAGES).not.toHaveProperty(['TOKEN', 'EXPIRED'].join('_'));
   });
 });
