@@ -62,13 +62,13 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_search_products',
-    { title: 'TVCMall Search Products', description: '使用假数据搜索 TVCMall 商品，后续替换为真实商品 API', inputSchema: SearchProductsInputSchema, outputSchema: SearchProductsOutputSchema },
+    { title: 'TVCMall Search Products', description: '通过 TVCMall WebApi 只读搜索商品', inputSchema: SearchProductsInputSchema, outputSchema: SearchProductsOutputSchema },
     async (input) => handleToolCall(() => searchProductsForMcp(input, { authContext, productClient }))
   );
 
   server.registerTool(
     'tvcmall_get_product_detail',
-    { title: 'TVCMall Get Product Detail', description: '使用假数据查看 TVCMall 商品详情，后续替换为真实商品详情 API', inputSchema: GetProductDetailInputSchema, outputSchema: ProductDetailSchema },
+    { title: 'TVCMall Get Product Detail', description: '通过 TVCMall WebApi 只读查询商品详情', inputSchema: GetProductDetailInputSchema, outputSchema: ProductDetailSchema },
     async (input) => handleToolCall(() => getProductDetailForMcp(input, { authContext, productClient }))
   );
 
@@ -92,7 +92,7 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_list_orders',
-    { title: 'TVCMall List Orders', description: '使用假数据查询 TVCMall 订单列表，后续替换为真实订单 API', inputSchema: ListOrdersInputSchema, outputSchema: ListOrdersOutputSchema },
+    { title: 'TVCMall List Orders', description: '通过 TVCMall WebApi 只读查询订单列表', inputSchema: ListOrdersInputSchema, outputSchema: ListOrdersOutputSchema },
     async (input) => handleToolCall(() => listOrdersForMcp(input, { authContext, orderClient }))
   );
 

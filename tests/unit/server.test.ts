@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { MCP_ERROR_MESSAGES } from '../../src/errors/mcp-errors.js';
 import { createTvcMallMcpServer } from '../../src/server.js';
 import type { StoredAuthSession, TokenStore } from '../../src/storage/token-store.js';
 
@@ -51,5 +52,21 @@ describe('createTvcMallMcpServer', () => {
     expect(registeredTools.tvcmall_estimate_shipping.description).toContain('订单运费');
     expect(registeredTools.tvcmall_estimate_shipping.description).toContain('tvcmall_get_tracking_info');
     expect(registeredTools.tvcmall_get_order_detail.description).toContain('订单物流和运费查询请使用 tvcmall_get_tracking_info');
+  });
+
+  it('publishes real read-only WebApi tool descriptions', () => {
+    const server = createTvcMallMcpServer({ tokenStore: new FakeTokenStore() });
+    const registeredTools = (server as unknown as {
+      _registeredTools: Record<string, { description?: string }>;
+    })._registeredTools;
+
+    expect(registeredTools.tvcmall_search_products.description).toContain('只读');
+    expect(registeredTools.tvcmall_get_product_detail.description).toContain('只读');
+    expect(registeredTools.tvcmall_list_orders.description).toContain('只读');
+    expect(JSON.stringify(registeredTools)).not.toContain('使用假数据');
+  });
+
+  it('does not expose the removed project validation error code', () => {
+    expect(MCP_ERROR_MESSAGES).not.toHaveProperty(['VALIDATION', 'ERROR'].join('_'));
   });
 });
