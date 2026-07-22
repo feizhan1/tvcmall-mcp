@@ -70,7 +70,8 @@ Internet MCP Client
 TVCMall Load Balancer / Reverse Proxy
   -> private HTTP/TLS, restricted security group
 Remote MCP Server replicas
-  -> HTTPS, outbound allowlist only
+  -> production/staging: HTTPS outbound allowlist only
+  -> sandbox: loopback/RFC1918 HTTP or HTTPS
 TVCMall WebApi
   -> internal ApplicationServices -> RDS
 ```
@@ -79,8 +80,9 @@ MCP session 只存在于单个进程内存。多副本部署需要在负载均�
 
 | 配置 | 要求 |
 | --- | --- |
-| `TVCMALL_WEBAPI_BASE_URL` | 必填 HTTPS；无 userinfo、query、fragment；包含现有 TVCMall WebApi 基础路径（示例 `/api`） |
+| `TVCMALL_WEBAPI_BASE_URL` | 必填；包含现有 WebApi 基础路径（示例 `/api`）；`production` / `staging` 必须 HTTPS，只有 `sandbox` 可使用受限 loopback/RFC1918 HTTP；无 userinfo、query、fragment |
 | `TVCMALL_API_TIMEOUT_MS` | WebApi 超时；默认 15000 ms；合法范围 `1..2_147_483_647` ms |
+| `TVCMALL_API_ENV` | 默认 `production`；可为 `production`、`staging`、`sandbox`；缺失或非法值回退 `production` |
 | `TVCMALL_MCP_HOST` | 默认 `127.0.0.1`；生产监听范围与反向代理拓扑一致 |
 | `TVCMALL_MCP_PORT` | 默认 `3000` |
 | `TVCMALL_MCP_PATH` | 默认 `/mcp`；不得带 query/fragment |
@@ -88,6 +90,8 @@ MCP session 只存在于单个进程内存。多副本部署需要在负载均�
 | `sessionIdleTtlMs` | session 空闲清理时间；默认 30 分钟 |
 
 部署环境不配置共享 PAT。健康检查 `GET /healthz` 只返回服务存活状态，不返回配置、session、PAT 或后端身份。
+
+`HTTPS` 在所有合法 `TVCMALL_API_ENV` 中可用，且 `production`、`staging`（以及缺失或非法值回退后的 `production`）强制 HTTPS。只有显式 `sandbox` 可使用 HTTP，hostname 仅限 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 的 `10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`。实现不解析 DNS；普通 hostname、公网、link-local、CGNAT 和非 loopback IPv6 HTTP 目标均拒绝，所有 URL 仍拒绝 userinfo、query 和 fragment。此例外只服务隔离网络的本地联调和可撤销测试 PAT，不放宽 MCP Client 入站 HTTPS/TLS 或生产 PAT 的边界。
 
 `TVCMALL_API_TIMEOUT_MS` 默认 `15000` ms，合法范围为 `1..2_147_483_647` ms；非法或超限值回退到默认值。该 deadline 覆盖等待 response headers 与读取 JSON body；超时映射为 `API_UNAVAILABLE`。
 
@@ -253,7 +257,7 @@ const response = await fetch(`${webApiBaseUrl}${existingRoute}`, {
 - [ ] 缺失/格式错误 PAT、替换 PAT、未知 session 和容量超限均有测试。
 - [ ] 不同 session 使用独立 MCP Server、transport、PAT 与指纹。
 - [ ] `DELETE`、`onclose`、idle TTL、初始化失败和 server close 均清理 session。
-- [ ] WebApi base URL 必填 HTTPS，且拒绝 userinfo/query/fragment。
+- [ ] WebApi base URL 必填且拒绝 userinfo/query/fragment；`production` / `staging` 强制 HTTPS，HTTP 只允许显式 `sandbox` 的 loopback/RFC1918 host。
 - [ ] MCP 调用的是现有 WebApi routes，并原样使用同一 PAT、只增加一次 `Bearer `。
 - [ ] ApplicationServices/RDS 执行 PAT verifier、`catalog.read` / `order.read` 与 route-scope allowlist。
 - [ ] MCP 不直连 ApplicationServices/RDS，不调用额外认证端点，不交换 token，不做本地 scope 判断。

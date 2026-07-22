@@ -78,7 +78,7 @@ npm install
 npm test
 npm run typecheck
 npm run build
-TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/api npm start
+TVCMALL_API_ENV=production TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/api npm start
 ```
 
 生产环境应把服务部署在 TLS 终止层后，只暴露 `/mcp` 和无敏感信息的 `/healthz`。反向代理与应用日志都不得记录入站 `TVCMALL_API_KEY`、出站 `Authorization` 或 PAT。MCP Server 不配置服务器共享 PAT；PAT 只能由各 MCP Client 在请求头中提供。
@@ -87,15 +87,28 @@ TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/api npm start
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `TVCMALL_WEBAPI_BASE_URL` | 无，必填 | 现有 TVCMall WebApi 基础 URL；必须包含实际基础路径（示例 `/api`）、使用 HTTPS，且不得包含 userinfo、query 或 fragment |
+| `TVCMALL_WEBAPI_BASE_URL` | 无，必填 | 现有 TVCMall WebApi 基础 URL；必须包含实际基础路径（示例 `/api`）；`production` / `staging` 必须使用 HTTPS，`sandbox` 才可受限使用私网 HTTP；不得包含 userinfo、query 或 fragment |
 | `TVCMALL_API_TIMEOUT_MS` | `15000` | WebApi 请求超时，单位毫秒；合法范围 `1..2_147_483_647` |
-| `TVCMALL_API_ENV` | `production` | API 环境标识：`production`、`staging` 或 `sandbox` |
+| `TVCMALL_API_ENV` | `production` | API 环境标识：`production`、`staging` 或 `sandbox`；未设置或非法值按 `production` 处理 |
 | `TVCMALL_MCP_HOST` | `127.0.0.1` | HTTP 监听地址；生产环境通常由反向代理访问 |
 | `TVCMALL_MCP_PORT` | `3000` | HTTP 监听端口 |
 | `TVCMALL_MCP_PATH` | `/mcp` | Streamable HTTP MCP 路径 |
 | `TVCMALL_LOG_LEVEL` | `info` | 日志级别；任何级别都必须脱敏凭据和 PII |
 
 `TVCMALL_WEBAPI_BASE_URL` 不提供隐式生产默认值，以免误连环境；例如现有 route 是 `/api/v3/...` 时，base URL 应以 `/api` 结尾，client 再追加 `/v3/...`。MCP Server 只为 PAT 增加一次 `Bearer ` 前缀，并复用接入说明中列出的现有 WebApi route；不会新增 MCP 专用业务 route、调用独立验证服务或交换 token。
+
+`HTTPS` 在所有合法环境均可使用。`production`、`staging`、未设置环境或非法环境均强制 `HTTPS`。只有显式 `TVCMALL_API_ENV=sandbox` 时，才允许 `http://` 指向 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。此校验不做 DNS 解析；普通域名、公网、链路本地 `169.254.0.0/16`、CGNAT `100.64.0.0/10` 与其他 IPv6 地址都被拒绝。所有环境仍拒绝 URL userinfo、query 和 fragment。
+
+### 本地 sandbox 联调
+
+本项目提供 `.env.example` 作为无敏感信息的模板。仅在隔离网络中，将它复制为被 Git 忽略的 `.env.local`，再替换为本机或受控 RFC1918 WebApi 地址：
+
+```bash
+cp .env.example .env.local
+npm run dev:local
+```
+
+`npm run dev:local` 和构建后的 `npm run start:local` 才会显式读取 `.env.local`；原 `npm run dev`、`npm start` 和生产部署仍由平台注入环境变量。`.env.local` 不得保存 `TVCMALL_API_KEY` 或 PAT，PAT 只能由 MCP Client 在每个请求中提供。sandbox HTTP 仅用于隔离网络和可撤销测试 PAT，不能降低公网 `/mcp` 的 HTTPS/TLS 要求，也不能使用生产客户 PAT。
 
 `TVCMALL_API_TIMEOUT_MS` 默认 `15000` ms，合法范围为 `1..2_147_483_647` ms；非法或超限值回退到默认值。该 deadline 覆盖等待 response headers 与读取 JSON body；超时映射为 `API_UNAVAILABLE`。
 

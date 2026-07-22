@@ -308,7 +308,9 @@ HTTP Method + normalized_route -> required_scope
 - 每个用户的 PAT 由 MCP Client 提供，只能短暂保存在对应 MCP session 的进程内存中；MCP Server 不使用环境变量或部署 secret 配置共享 PAT。
 - 日志、异常、链路追踪中必须脱敏入站 `TVCMALL_API_KEY`、出站 `Authorization` 和 `tmcp_v1_` token。
 - `DELETE /mcp`、transport `onclose`、idle TTL、initialize 失败或 server close 后必须清理 session PAT 与指纹。
-- MCP Server 到 WebApi 必须使用 HTTPS。
+- `TVCMALL_API_ENV=production` 或 `staging` 时，MCP Server 到 WebApi 必须使用 HTTPS；`HTTPS` 在所有环境均可使用。
+- 只有显式 `TVCMALL_API_ENV=sandbox` 的隔离本地联调，才允许 HTTP WebApi URL，且 hostname 必须为 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。不得通过普通 hostname、公网、link-local、CGNAT 或非 loopback IPv6 使用 HTTP；URL 一律不得带 userinfo、query 或 fragment。
+- `sandbox` HTTP 仅可配合隔离网络和可撤销测试 PAT，不可使用生产客户 PAT，也不改变 MCP Client 到 `/mcp` 的 HTTPS/TLS 要求。`TVCMALL_API_ENV` 未设置或非法时按 `production` 处理。
 - 不要把 PAT 发送给除 TVCMall WebApi 之外的任何下游服务。
 - 不要在 MCP Server 中保存 `mcp_pat_pepper`；pepper 只属于 ApplicationServices。
 - `mcp_pat_pepper` 从 ApplicationServices 配置 `user.authentication.mcp_pat_pepper` 读取，不对 MCP Server 暴露。

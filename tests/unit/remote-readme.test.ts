@@ -155,4 +155,23 @@ describe('remote Streamable HTTP documentation', () => {
       expect(currentDocs).not.toContain(term);
     }
   });
+
+  it('documents sandbox private HTTP without weakening production HTTPS', () => {
+    for (const document of [readme, apiContract, architecture, authorityDoc]) {
+      for (const term of [
+        'TVCMALL_API_ENV',
+        'sandbox',
+        'RFC1918',
+        'production',
+        'staging',
+        'HTTPS',
+      ]) {
+        expect(document).toContain(term);
+      }
+    }
+
+    expect(readme).toContain('.env.local');
+    expect(readme).toContain('npm run dev:local');
+    expect(readme).not.toContain('TVCMALL_API_KEY=tmcp_v1_');
+  });
 });
