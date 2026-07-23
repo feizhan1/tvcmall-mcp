@@ -72,6 +72,8 @@ describe('MCP HTTP logger', () => {
     });
     expect(record).not.toHaveProperty('headers');
     expect(record).not.toHaveProperty('metadata');
+    expect(record).not.toHaveProperty('webApiRequestBody');
+    expect(record).not.toHaveProperty('webApiResponseBody');
   });
 
   it('writes a safe completion record for every failed WebApi request', () => {
@@ -87,6 +89,9 @@ describe('MCP HTTP logger', () => {
       traceId: '00000000-0000-4000-8000-000000000000',
       webApiDurationMs: 42,
       webApiMethod: 'GET',
+      webApiRequestHeaders: {},
+      webApiRequestQuery: {},
+      webApiResponseBodyState: 'unavailable',
       webApiStatus: 403
     });
 
@@ -106,5 +111,51 @@ describe('MCP HTTP logger', () => {
     });
     expect(JSON.stringify(record)).not.toContain('Authorization');
     expect(record).not.toHaveProperty('headers');
+  });
+
+  it('writes detailed WebApi diagnostics without adding them to tool summaries', () => {
+    const output = new StringOutput();
+    const logger = createMcpHttpLogger({ level: 'info', output });
+
+    logger.webApiRequestCompleted({
+      errorCode: 'PERMISSION_DENIED',
+      normalizedRoute: 'api/v3/user/points/stat',
+      outcome: 'error',
+      traceId: '00000000-0000-4000-8000-000000000000',
+      webApiDurationMs: 42,
+      webApiFailurePhase: 'http_response',
+      webApiMethod: 'GET',
+      webApiRequestBody: '{"query":"case"}',
+      webApiRequestBodyBytes: 16,
+      webApiRequestBodyTruncated: false,
+      webApiRequestHeaders: {
+        authorization: '[REDACTED]',
+        'content-type': 'application/json'
+      },
+      webApiRequestQuery: { page: '2' },
+      webApiResponseBody: '{"code":"ROUTE_NOT_ALLOWED"}',
+      webApiResponseBodyBytes: 28,
+      webApiResponseBodyState: 'complete',
+      webApiResponseBodyTruncated: false,
+      webApiResponseHeaders: { 'content-type': 'application/json' },
+      webApiStatus: 403
+    });
+
+    expect(JSON.parse(output.value)).toMatchObject({
+      event: 'mcp_webapi_request_completed',
+      webApiRequestBody: '{"query":"case"}',
+      webApiRequestBodyBytes: 16,
+      webApiRequestBodyTruncated: false,
+      webApiRequestHeaders: {
+        authorization: '[REDACTED]',
+        'content-type': 'application/json'
+      },
+      webApiRequestQuery: { page: '2' },
+      webApiResponseBody: '{"code":"ROUTE_NOT_ALLOWED"}',
+      webApiResponseBodyBytes: 28,
+      webApiResponseBodyState: 'complete',
+      webApiResponseBodyTruncated: false,
+      webApiResponseHeaders: { 'content-type': 'application/json' }
+    });
   });
 });

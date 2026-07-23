@@ -81,9 +81,13 @@ export function createMcpHttpLogger(options: {
   const configuredLevel = options.level ?? 'info';
   const output = options.output ?? process.stderr;
 
-  function write(level: Exclude<TvcMallLogLevel, 'silent'>, event: string, details: Record<string, string | number | undefined>): void {
+  function write(level: Exclude<TvcMallLogLevel, 'silent'>, event: string, details: Record<string, unknown>): void {
     if (LEVEL_PRIORITY[level] < LEVEL_PRIORITY[configuredLevel]) return;
-    output.write(`${JSON.stringify({ timestamp: new Date().toISOString(), level, event, ...details })}\n`);
+    try {
+      output.write(`${JSON.stringify({ timestamp: new Date().toISOString(), level, event, ...details })}\n`);
+    } catch {
+      // Logging must not interfere with MCP request handling.
+    }
   }
 
   return {
@@ -113,6 +117,17 @@ export function createMcpHttpLogger(options: {
         webApiDurationMs: event.webApiDurationMs,
         webApiFailurePhase: event.webApiFailurePhase,
         webApiMethod: event.webApiMethod,
+        webApiRequestBody: event.webApiRequestBody,
+        webApiRequestBodyBytes: event.webApiRequestBodyBytes,
+        webApiRequestBodyTruncated: event.webApiRequestBodyTruncated,
+        webApiRequestBodyType: event.webApiRequestBodyType,
+        webApiRequestHeaders: event.webApiRequestHeaders,
+        webApiRequestQuery: event.webApiRequestQuery,
+        webApiResponseBody: event.webApiResponseBody,
+        webApiResponseBodyBytes: event.webApiResponseBodyBytes,
+        webApiResponseBodyState: event.webApiResponseBodyState,
+        webApiResponseBodyTruncated: event.webApiResponseBodyTruncated,
+        webApiResponseHeaders: event.webApiResponseHeaders,
         webApiStatus: event.webApiStatus
       });
     },
