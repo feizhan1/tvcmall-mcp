@@ -6,11 +6,13 @@ import { registerTvcMallTools } from '../../src/app/register-tools.js';
 import { createPatAuthContext } from '../../src/auth/request-auth-context.js';
 import { FakeBalanceClient } from '../../src/balance/fake-balance-client.js';
 import { FakeOrderClient } from '../../src/orders/fake-order-client.js';
+import { FakeProductClient } from '../../src/products/fake-product-client.js';
 import { FakePointsClient } from '../../src/points/fake-points-client.js';
 import type { ProductClient, ProductSearchInput } from '../../src/products/product-client.js';
 import { FakeShippingClient } from '../../src/shipping/fake-shipping-client.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
 import { FakeTrackingClient } from '../../src/tracking/fake-tracking-client.js';
+import type { McpHttpLogger } from '../../src/logging/mcp-http-logger.js';
 
 const pat = 'tmcp_v1_token-id.secret-value';
 const upstreamBodySecret = 'upstream-sensitive-error-detail';
@@ -288,6 +290,34 @@ describe('registered tool WebApi error wrapper', () => {
     expect(JSON.stringify(result)).toContain('API_UNAVAILABLE');
     expect(JSON.stringify(result)).not.toContain(pat);
   });
+
+  it('logs a tool error with its stable code but not upstream or input data', async () => {
+    const logger = new RecordingLogger();
+    const result = await callSearchProductsTool(await captureHttpError(401), logger);
+
+    expect(result.isError).toBe(true);
+    expect(logger.tools).toContainEqual({
+      toolName: 'tvcmall_search_products',
+      outcome: 'error',
+      errorCode: 'AUTH_REQUIRED',
+      durationMs: expect.any(Number)
+    });
+    expect(JSON.stringify(logger)).not.toContain(pat);
+    expect(JSON.stringify(logger)).not.toContain(upstreamBodySecret);
+    expect(JSON.stringify(logger)).not.toContain('case');
+  });
+
+  it('logs successful auth status calls without an error code', async () => {
+    const logger = new RecordingLogger();
+    const result = await callAuthStatusTool(logger);
+
+    expect(result.isError).not.toBe(true);
+    expect(logger.tools).toContainEqual({
+      toolName: 'tvcmall_auth_status',
+      outcome: 'success',
+      durationMs: expect.any(Number)
+    });
+  });
 });
 
 async function captureHttpError(status: number): Promise<unknown> {
@@ -307,25 +337,45 @@ async function captureHttpError(status: number): Promise<unknown> {
   throw new Error(`Expected HTTP ${status} to fail`);
 }
 
-async function callSearchProductsTool(error: unknown): Promise<CallToolResult> {
+async function callSearchProductsTool(error: unknown, logger?: McpHttpLogger): Promise<CallToolResult> {
+  const { callbacks } = registerTestTools({
+    logger,
+    productClient: {
+      async searchProducts(_input: ProductSearchInput, _session: StoredAuthSession) {
+        throw error;
+      },
+      async getProductDetail() {
+        throw error;
+      }
+    }
+  });
+
+  const callback = callbacks.get('tvcmall_search_products');
+  if (!callback) throw new Error('Search products tool was not registered');
+  return callback({ query: 'case', page: 1, page_size: 20 });
+}
+
+async function callAuthStatusTool(logger: McpHttpLogger): Promise<CallToolResult> {
+  const { callbacks } = registerTestTools({ logger });
+  const callback = callbacks.get('tvcmall_auth_status');
+  if (!callback) throw new Error('Auth status tool was not registered');
+  return callback({});
+}
+
+function registerTestTools(options: { logger?: McpHttpLogger; productClient?: ProductClient }): {
+  callbacks: Map<string, (input: unknown) => Promise<CallToolResult>>;
+} {
   const callbacks = new Map<string, (input: unknown) => Promise<CallToolResult>>();
   const server = {
     registerTool(name: string, _config: unknown, callback: (input: unknown) => Promise<CallToolResult>) {
       callbacks.set(name, callback);
     }
   } as unknown as McpServer;
-  const productClient: ProductClient = {
-    async searchProducts(_input: ProductSearchInput, _session: StoredAuthSession) {
-      throw error;
-    },
-    async getProductDetail() {
-      throw error;
-    }
-  };
 
   registerTvcMallTools(server, {
     authContext: createPatAuthContext(pat),
-    productClient,
+    logger: options.logger,
+    productClient: options.productClient ?? new FakeProductClient(),
     balanceClient: new FakeBalanceClient(),
     pointsClient: new FakePointsClient(),
     shippingClient: new FakeShippingClient(),
@@ -333,7 +383,19 @@ async function callSearchProductsTool(error: unknown): Promise<CallToolResult> {
     trackingClient: new FakeTrackingClient()
   });
 
-  const callback = callbacks.get('tvcmall_search_products');
-  if (!callback) throw new Error('Search products tool was not registered');
-  return callback({ query: 'case', page: 1, page_size: 20 });
+  return { callbacks };
+}
+
+class RecordingLogger implements McpHttpLogger {
+  readonly tools: Parameters<McpHttpLogger['toolCompleted']>[0][] = [];
+
+  requestCompleted(): void {}
+
+  serverStarted(): void {}
+
+  sessionEvent(): void {}
+
+  toolCompleted(details: Parameters<McpHttpLogger['toolCompleted']>[0]): void {
+    this.tools.push(details);
+  }
 }

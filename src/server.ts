@@ -10,6 +10,7 @@ import type { PointsClient } from './points/points-client.js';
 import type { ProductClient } from './products/product-client.js';
 import type { ShippingClient } from './shipping/shipping-client.js';
 import type { TrackingClient } from './tracking/tracking-client.js';
+import type { McpHttpLogger } from './logging/mcp-http-logger.js';
 import type { TokenStore } from './storage/token-store.js';
 import { createDefaultTokenStore } from './storage/token-store.js';
 import { PACKAGE_VERSION } from './version.js';
@@ -19,6 +20,7 @@ export interface ServerOptions {
   tokenStore?: TokenStore;
   authClient?: AuthClient;
   balanceClient?: BalanceClient;
+  logger?: McpHttpLogger;
   productClient?: ProductClient;
   pointsClient?: PointsClient;
   shippingClient?: ShippingClient;
@@ -38,7 +40,18 @@ export function createTvcMallMcpServer(options: ServerOptions = {}): McpServer {
   const trackingClient = options.trackingClient ?? defaultClients.trackingClient;
   const server = new McpServer({ name: 'tvcmall-mcp', version: PACKAGE_VERSION });
 
-  registerTvcMallTools(server, { authContext: options.authContext, tokenStore, authClient, balanceClient, productClient, pointsClient, shippingClient, orderClient, trackingClient });
+  registerTvcMallTools(server, {
+    authContext: options.authContext,
+    tokenStore,
+    authClient,
+    balanceClient,
+    logger: options.logger,
+    productClient,
+    pointsClient,
+    shippingClient,
+    orderClient,
+    trackingClient
+  });
 
   return server;
 }
