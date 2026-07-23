@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
-image_repository=${IMAGE_REPOSITORY:-crpi-xjd40982wqk3bdon.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-mcp}
+image_repository=${IMAGE_REPOSITORY:-}
 image_platform=${IMAGE_PLATFORM:-linux/amd64}
 
 if [[ -n "${IMAGE_TAG:-}" ]]; then

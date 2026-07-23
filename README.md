@@ -94,14 +94,22 @@ TVCMALL_API_ENV=production TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/ap
 
 ```bash
 docker login crpi-xjd40982wqk3bdon.cn-shenzhen.personal.cr.aliyuncs.com
-./scripts/docker-build-push.sh
+./scripts/docker-build-push-stage.sh
 ```
 
-脚本默认构建 `linux/amd64` 镜像，以当前 Git 提交短 SHA 和 `latest` 两个标签推送到公网仓库。需要显式指定标签或通过专有网络仓库推送时，可覆盖环境变量：
+预发布脚本默认推送到 `tvcmall-mcp`，生产脚本默认推送到 `tvcmall-product-mcp`：
 
 ```bash
-IMAGE_TAG=release-20260722 ./scripts/docker-build-push.sh
-IMAGE_REPOSITORY=crpi-xjd40982wqk3bdon-vpc.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-mcp ./scripts/docker-build-push.sh
+./scripts/docker-build-push-stage.sh
+./scripts/docker-build-push-product.sh
+```
+
+两个脚本均默认构建 `linux/amd64` 镜像，并以当前 Git 提交短 SHA 和 `latest` 两个标签推送。需要显式指定标签或通过专有网络推送时，可覆盖环境变量：
+
+```bash
+IMAGE_TAG=release-20260723 ./scripts/docker-build-push-stage.sh
+IMAGE_REPOSITORY=crpi-xjd40982wqk3bdon-vpc.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-mcp ./scripts/docker-build-push-stage.sh
+IMAGE_REPOSITORY=crpi-xjd40982wqk3bdon-vpc.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-product-mcp ./scripts/docker-build-push-product.sh
 ```
 
 脚本不会保存或输出 Docker 登录密码；生产运行容器时仍必须提供 `TVCMALL_WEBAPI_BASE_URL`。
@@ -121,7 +129,7 @@ docker compose -f compose.staging.yaml up -d
 生产部署：
 
 ```bash
-export TVCMALL_MCP_IMAGE=crpi-xjd40982wqk3bdon.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-mcp:1ee30ec
+export TVCMALL_MCP_IMAGE=crpi-xjd40982wqk3bdon.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-product-mcp:1ee30ec
 export TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/api
 docker compose -f compose.production.yaml up -d
 ```
