@@ -37,7 +37,29 @@ class TestHttpClient extends BaseHttpClient {
 }
 
 describe('BaseHttpClient WebApi errors', () => {
+  it('records one safe completion event for a successful WebApi request', async () => {
+    const events: unknown[] = [];
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const client = new TestHttpClient({
+      baseUrl: 'https://webapi.test',
+      fetch: fetchImpl as typeof fetch,
+      onWebApiRequestCompleted: (event: unknown) => events.push(event)
+    });
+
+    await expect(client.get()).resolves.toEqual({ ok: true });
+
+    expect(events).toContainEqual({
+      outcome: 'success',
+      normalizedRoute: 'test',
+      traceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      webApiDurationMs: expect.any(Number),
+      webApiMethod: 'GET',
+      webApiStatus: 200
+    });
+  });
+
   it('adds safe tracing headers and retains the allowed authorization reason for a 403', async () => {
+    const events: unknown[] = [];
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ detail: upstreamBodySecret }), {
       status: 403,
       headers: {
@@ -45,7 +67,11 @@ describe('BaseHttpClient WebApi errors', () => {
         'X-TVCMall-MCP-Auth-Reason': 'scope_missing'
       }
     }));
-    const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
+    const client = new TestHttpClient({
+      baseUrl: 'https://webapi.test',
+      fetch: fetchImpl as typeof fetch,
+      onWebApiRequestCompleted: (event: unknown) => events.push(event)
+    });
 
     const error = await client.getWithAuthorization().catch((caught: unknown) => caught);
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
@@ -67,14 +93,31 @@ describe('BaseHttpClient WebApi errors', () => {
     expect(headers.get('X-TVCMall-MCP-Trace-Id')).toMatch(/^[0-9a-f-]{36}$/);
     expect(JSON.stringify(error)).not.toContain(pat);
     expect(JSON.stringify(error)).not.toContain(upstreamBodySecret);
+    expect(events).toContainEqual({
+      outcome: 'error',
+      errorCode: 'PERMISSION_DENIED',
+      webApiFailurePhase: 'http_response',
+      authReasonState: 'accepted',
+      authReason: 'scope_missing',
+      normalizedRoute: 'test',
+      traceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      webApiDurationMs: expect.any(Number),
+      webApiMethod: 'GET',
+      webApiStatus: 403
+    });
   });
 
   it('ignores an unknown authorization reason response header', async () => {
+    const events: unknown[] = [];
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ detail: upstreamBodySecret }), {
       status: 403,
       headers: { 'X-TVCMall-MCP-Auth-Reason': 'arbitrary-text' }
     }));
-    const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
+    const client = new TestHttpClient({
+      baseUrl: 'https://webapi.test',
+      fetch: fetchImpl as typeof fetch,
+      onWebApiRequestCompleted: (event: unknown) => events.push(event)
+    });
 
     const error = await client.get().catch((caught: unknown) => caught);
 
@@ -89,6 +132,13 @@ describe('BaseHttpClient WebApi errors', () => {
     });
     expect((error as WebApiRequestError).metadata?.authReason).toBeUndefined();
     expect(JSON.stringify(error)).not.toContain('arbitrary-text');
+    expect(events).toContainEqual(expect.objectContaining({
+      outcome: 'error',
+      authReasonState: 'unrecognized',
+      webApiFailurePhase: 'http_response',
+      webApiStatus: 403
+    }));
+    expect(JSON.stringify(events)).not.toContain('arbitrary-text');
   });
 
   it.each([
