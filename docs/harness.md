@@ -78,7 +78,7 @@ HTTP harness 应使用本地监听端口和 stub/fake 依赖，不请求生产�
 - HTTP `POST` / `GET` / `DELETE` 生命周期、容量和 idle TTL。
 - WebApi Bearer PAT 透传与 HTTP 错误映射。
 
-因此 stdio 结果不能作为远程认证或生产部署验收证据。该内部入口的 stdout 仍只能承载 MCP JSON-RPC；普通日志和错误栈必须写 stderr 或被测试捕获。
+因此 stdio 结果不能作为远程认证或生产部署验收证据。该内部入口不创建远程 HTTP logger，stdout 仍只能承载 MCP JSON-RPC，且正常的内部 stdio 回归不输出普通日志到 stderr；远程服务的安全 JSON 诊断日志只由 HTTP 入口写入 stderr。
 
 常用内部回归命令：
 

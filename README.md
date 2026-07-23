@@ -154,9 +154,11 @@ TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose
 | `TVCMALL_MCP_HOST` | `127.0.0.1` | HTTP 监听地址；生产环境通常由反向代理访问 |
 | `TVCMALL_MCP_PORT` | `3000` | HTTP 监听端口 |
 | `TVCMALL_MCP_PATH` | `/mcp` | Streamable HTTP MCP 路径 |
-| `TVCMALL_LOG_LEVEL` | `info` | 日志级别；任何级别都必须脱敏凭据和 PII |
+| `TVCMALL_LOG_LEVEL` | `info` | 日志级别；远程 HTTP 服务默认输出安全诊断日志，只有 `silent` 完全关闭 |
 
 `TVCMALL_WEBAPI_BASE_URL` 不提供隐式生产默认值，以免误连环境；例如现有 route 是 `/api/v3/...` 时，base URL 应以 `/api` 结尾，client 再追加 `/v3/...`。MCP Server 只为 PAT 增加一次 `Bearer ` 前缀，并复用接入说明中列出的现有 WebApi route；不会新增 MCP 专用业务 route、调用独立验证服务或交换 token。
+
+远程 Streamable HTTP 服务把诊断日志写到 stderr，每行一个 JSON 对象。未设置时 `info` 会记录服务启动、MCP HTTP 请求完成和已执行 tool 的结果；`debug` 额外记录 session 生命周期，`warn` / `error` 只保留对应严重级别，明确设置 `silent` 才完全不输出普通日志。日志字段只包括事件名、method/status、JSON-RPC method、预定义 tool 名、稳定错误码和耗时，绝不包含 `TVCMALL_API_KEY`、PAT、`Authorization`、请求参数、session ID、WebApi 原始响应或 PII。
 
 `HTTPS` 在所有合法环境均可使用。`production`、`staging`、未设置环境或非法环境均强制 `HTTPS`。只有显式 `TVCMALL_API_ENV=sandbox` 时，才允许 `http://` 指向 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。此校验不做 DNS 解析；普通域名、公网、链路本地 `169.254.0.0/16`、CGNAT `100.64.0.0/10` 与其他 IPv6 地址都被拒绝。所有环境仍拒绝 URL userinfo、query 和 fragment。
 
@@ -170,6 +172,8 @@ npm run dev:local
 ```
 
 `npm run dev:local` 和构建后的 `npm run start:local` 才会显式读取 `.env.local`；原 `npm run dev`、`npm start` 和生产部署仍由平台注入环境变量。`.env.local` 不得保存 `TVCMALL_API_KEY` 或 PAT，PAT 只能由 MCP Client 在每个请求中提供。sandbox HTTP 仅用于隔离网络和可撤销测试 PAT，不能降低公网 `/mcp` 的 HTTPS/TLS 要求，也不能使用生产客户 PAT。
+
+本地联调默认会在运行 `npm run dev:local` 的终端 stderr 显示安全诊断日志；如需静默运行，显式设置 `TVCMALL_LOG_LEVEL=silent`。
 
 `TVCMALL_API_TIMEOUT_MS` 默认 `15000` ms，合法范围为 `1..2_147_483_647` ms；非法或超限值回退到默认值。该 deadline 覆盖等待 response headers 与读取 JSON body；超时映射为 `API_UNAVAILABLE`。
 

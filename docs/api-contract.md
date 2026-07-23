@@ -367,6 +367,8 @@ WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/sc
 
 PAT 不属于 server runtime config。禁止以环境变量配置一个供所有客户共享的 PAT。
 
+远程 Streamable HTTP 入口将普通诊断日志写到 stderr，使用一行一个 JSON 对象。默认 `info` 输出服务启动、MCP 请求完成和已执行 tool 的完成记录；`debug` 追加 session 生命周期，`warn` / `error` 按严重级别过滤，只有显式 `silent` 完全关闭普通日志。日志仅允许事件名、HTTP method/status、JSON-RPC method、预定义 tool 名、稳定错误码、耗时和监听配置；不得记录入站 header、PAT、`Authorization`、MCP 参数、session ID、WebApi 正文、堆栈或 PII。
+
 `.env.example` 仅提供泛化的 sandbox 本地配置；开发者可在 Git 忽略的 `.env.local` 填入受控 WebApi 地址，并通过 `npm run dev:local` 或 `npm run start:local` 显式加载。`.env.local` 禁止包含 `TVCMALL_API_KEY` 或 PAT，原 `dev` / `start` 和生产部署不自动读取该文件。
 
 `TVCMALL_API_TIMEOUT_MS` 默认 `15000` ms，合法范围为 `1..2_147_483_647` ms；非法或超限值回退到默认值。该 deadline 覆盖等待 response headers 与读取 JSON body；超时映射为 `API_UNAVAILABLE`。
