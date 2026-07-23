@@ -371,10 +371,42 @@ describe('registered tool WebApi error wrapper', () => {
     const result = await callSearchProductsTool(await captureHttpError(401), logger);
 
     expect(result.isError).toBe(true);
-    expect(logger.tools).toContainEqual({
+    expect(logger.tools).toContainEqual(expect.objectContaining({
       toolName: 'tvcmall_search_products',
       outcome: 'error',
       errorCode: 'AUTH_REQUIRED',
+      webApiMethod: 'GET',
+      normalizedRoute: 'test',
+      webApiStatus: 401,
+      traceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      durationMs: expect.any(Number)
+    }));
+    expect(logger.tools[0]).not.toHaveProperty('authReason');
+    expect(JSON.stringify(logger)).not.toContain(pat);
+    expect(JSON.stringify(logger)).not.toContain(upstreamBodySecret);
+    expect(JSON.stringify(logger)).not.toContain('case');
+  });
+
+  it('logs only allowed WebApi authorization diagnostics for a tool failure', async () => {
+    const logger = new RecordingLogger();
+    const result = await callSearchProductsTool(new WebApiRequestError('PERMISSION_DENIED', {
+      authReason: 'scope_missing',
+      normalizedRoute: 'test',
+      traceId: '00000000-0000-4000-8000-000000000000',
+      webApiMethod: 'GET',
+      webApiStatus: 403
+    }), logger);
+
+    expect(result.isError).toBe(true);
+    expect(logger.tools).toContainEqual({
+      toolName: 'tvcmall_search_products',
+      outcome: 'error',
+      errorCode: 'PERMISSION_DENIED',
+      webApiMethod: 'GET',
+      normalizedRoute: 'test',
+      webApiStatus: 403,
+      traceId: '00000000-0000-4000-8000-000000000000',
+      authReason: 'scope_missing',
       durationMs: expect.any(Number)
     });
     expect(JSON.stringify(logger)).not.toContain(pat);

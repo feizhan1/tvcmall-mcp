@@ -41,4 +41,36 @@ describe('MCP HTTP logger', () => {
 
     expect(output.value).toBe('');
   });
+
+  it('writes only typed WebApi authorization diagnostics for a failed tool', () => {
+    const output = new StringOutput();
+    createMcpHttpLogger({ level: 'info', output }).toolCompleted({
+      toolName: 'tvcmall_search_products',
+      outcome: 'error',
+      errorCode: 'PERMISSION_DENIED',
+      webApiMethod: 'GET',
+      normalizedRoute: 'api/v3/product/search',
+      webApiStatus: 403,
+      traceId: '00000000-0000-4000-8000-000000000000',
+      authReason: 'scope_missing',
+      durationMs: 8
+    });
+
+    const record = JSON.parse(output.value) as Record<string, unknown>;
+    expect(record).toMatchObject({
+      event: 'mcp_tool_completed',
+      level: 'warn',
+      toolName: 'tvcmall_search_products',
+      outcome: 'error',
+      errorCode: 'PERMISSION_DENIED',
+      webApiMethod: 'GET',
+      normalizedRoute: 'api/v3/product/search',
+      webApiStatus: 403,
+      traceId: '00000000-0000-4000-8000-000000000000',
+      authReason: 'scope_missing',
+      durationMs: 8
+    });
+    expect(record).not.toHaveProperty('headers');
+    expect(record).not.toHaveProperty('metadata');
+  });
 });

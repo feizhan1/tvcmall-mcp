@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { AuthClient } from '../auth/auth-client.js';
 import type { RequestAuthContext } from '../auth/request-auth-context.js';
 import type { BalanceClient } from '../balance/balance-client.js';
-import { WebApiRequestError } from '../api/http-client.js';
+import { WebApiRequestError, type WebApiFailureMetadata } from '../api/http-client.js';
 import { MCP_ERROR_MESSAGES, type McpErrorCode } from '../errors/mcp-errors.js';
 import type { McpHttpLogger, TvcMallToolName } from '../logging/mcp-http-logger.js';
 import type { OrderClient } from '../orders/order-client.js';
@@ -139,10 +139,12 @@ async function handleToolCall(
 ): Promise<CallToolResult> {
   const startedAt = Date.now();
   let result: CallToolResult;
+  let webApiFailureMetadata: WebApiFailureMetadata | undefined;
   try {
     result = await operation();
   } catch (error) {
     const code = error instanceof WebApiRequestError ? error.code : 'API_UNAVAILABLE';
+    if (error instanceof WebApiRequestError) webApiFailureMetadata = error.metadata;
     result = {
       isError: true,
       content: [{ type: 'text', text: MCP_ERROR_MESSAGES[code] }]
@@ -152,7 +154,7 @@ async function handleToolCall(
   logger?.toolCompleted({
     toolName,
     outcome: result.isError ? 'error' : 'success',
-    ...(result.isError ? { errorCode: readKnownMcpErrorCode(result) } : {}),
+    ...(result.isError ? { errorCode: readKnownMcpErrorCode(result), ...webApiFailureMetadata } : {}),
     durationMs: Date.now() - startedAt
   });
   return result;
