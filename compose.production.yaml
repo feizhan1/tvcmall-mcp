@@ -1,0 +1,26 @@
+services:
+  tvcmall-mcp:
+    image: ${TVCMALL_MCP_IMAGE:?请设置 TVCMALL_MCP_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "${TVCMALL_MCP_BIND_ADDRESS:-127.0.0.1}:${TVCMALL_MCP_PORT:-3000}:3000"
+    environment:
+      TVCMALL_WEBAPI_BASE_URL: ${TVCMALL_WEBAPI_BASE_URL:?请设置 TVCMALL_WEBAPI_BASE_URL}
+      TVCMALL_API_ENV: production
+      TVCMALL_MCP_HOST: 0.0.0.0
+      TVCMALL_MCP_PORT: "3000"
+      TVCMALL_MCP_PATH: ${TVCMALL_MCP_PATH:-/mcp}
+      TVCMALL_API_TIMEOUT_MS: ${TVCMALL_API_TIMEOUT_MS:-15000}
+      TVCMALL_LOG_LEVEL: ${TVCMALL_LOG_LEVEL:-info}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -108,12 +108,22 @@ IMAGE_REPOSITORY=crpi-xjd40982wqk3bdon-vpc.cn-shenzhen.personal.cr.aliyuncs.com/
 
 ### Docker Compose 部署
 
-`compose.yaml` 只部署 MCP 服务，不保存 PAT、Docker 登录凭据或客户数据。先设置不可变镜像标签和生产 WebApi 地址，再启动服务：
+`compose.staging.yaml` 和 `compose.production.yaml` 只部署 MCP 服务，不保存 PAT、Docker 登录凭据或客户数据。两个文件分别固定 `TVCMALL_API_ENV=staging` 和 `TVCMALL_API_ENV=production`，不能通过外部变量覆盖。
+
+预发布部署：
+
+```bash
+export TVCMALL_MCP_IMAGE=crpi-xjd40982wqk3bdon.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-mcp:1ee30ec
+export TVCMALL_WEBAPI_BASE_URL=https://staging-webapi.example.com/api
+docker compose -f compose.staging.yaml up -d
+```
+
+生产部署：
 
 ```bash
 export TVCMALL_MCP_IMAGE=crpi-xjd40982wqk3bdon.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-mcp:1ee30ec
 export TVCMALL_WEBAPI_BASE_URL=https://webapi.example.com/api
-docker compose up -d
+docker compose -f compose.production.yaml up -d
 ```
 
 部署主机位于阿里云深圳 VPC 时，可将镜像地址的 registry host 替换为 `crpi-xjd40982wqk3bdon-vpc.cn-shenzhen.personal.cr.aliyuncs.com`，通过专有网络拉取同一镜像。
@@ -121,10 +131,10 @@ docker compose up -d
 Compose 默认将容器 `3000` 端口绑定到宿主机 `127.0.0.1:3000`，供宿主机的 TLS 反向代理访问。仅在受控的内网中确有需要时，才指定对外绑定地址或变更宿主机端口：
 
 ```bash
-TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose up -d
+TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose.production.yaml up -d
 ```
 
-服务包含 `/healthz` 健康检查并配置为 `unless-stopped` 自动重启。更新不可变镜像标签后，执行 `docker compose pull && docker compose up -d`。
+服务包含 `/healthz` 健康检查并配置为 `unless-stopped` 自动重启。更新不可变镜像标签后，执行 `docker compose -f compose.production.yaml pull && docker compose -f compose.production.yaml up -d`；预发布环境将命令中的文件替换为 `compose.staging.yaml`。
 
 ## 配置
 
