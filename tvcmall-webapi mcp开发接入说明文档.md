@@ -123,6 +123,8 @@ X-TVCMall-MCP-Auth-Reason: scope_missing | route_not_registered | route_disabled
 
 该 header 缺失时保持原有 `403` 行为；不得把 PAT、用户、scope 列表、数据库细节或原始异常放入 header。MCP 仅接受上表的精确值写入安全日志，未知值会被忽略。无论是否发送该 header，授权结果仍完全由 WebApi/ApplicationServices/RDS 决定。
 
+MCP 会为每一次业务 WebApi 调用输出一条安全完成日志。若该日志的 `authReasonState` 为 `missing`，表示 WebApi 未返回本节 header；若为 `unrecognized`，表示返回值不在本节枚举中。MCP 不记录未知 header 原文，因此 WebApi 仍应使用 trace ID 在自身安全审计日志中排查具体返回值。
+
 ## 5. 授权链路
 
 ```mermaid

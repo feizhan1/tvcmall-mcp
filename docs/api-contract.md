@@ -125,6 +125,8 @@ X-TVCMall-MCP-Auth-Reason: scope_missing | route_not_registered | route_disabled
 
 MCP 只读取 HTTP status 和这个单一 response header，不读取失败 response body；只有精确匹配表中值的 `authReason` 才写入失败 tool 日志。header 缺失或未知值时省略 `authReason`，并通过 trace ID 查询 WebApi/ApplicationServices 审计日志。该可选 header 只帮助诊断，绝不改变 WebApi 的授权决定或 MCP tool 的稳定错误码。
 
+远程 HTTP 服务对每次下游业务 WebApi 请求写入 `mcp_webapi_request_completed`。成功事件包含 trace、method、normalized route、HTTP status 和耗时；失败事件额外包含稳定错误码及 `webApiFailurePhase`。对 `403`，`authReasonState=accepted` 表示已接受白名单原因，`missing` 表示未返回 header，`unrecognized` 表示返回值不在白名单。该事件不记录原始 header 值、host、query、body、PAT、`Authorization`、session 或 PII。
+
 ### 4.1.2 WebApi 传输环境
 
 `TVCMALL_API_ENV` 可为 `production`、`staging` 或 `sandbox`；未设置或非法值回退为 `production`。`HTTPS` 在所有合法环境中允许，而 `production`、`staging` 及回退的 `production` 必须使用 HTTPS WebApi URL。

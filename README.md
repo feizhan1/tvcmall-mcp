@@ -168,6 +168,8 @@ TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose
 
 `traceId` 不由 PAT、session 或请求参数派生。值为空、缺失或不在白名单内的拒绝原因不会写入日志，也不会改变授权结果。排查 `PERMISSION_DENIED` 时，先从 MCP 日志取得 `traceId`，再在 WebApi/ApplicationServices 的安全审计日志中查询对应的 method、normalized route 和授权决策；不要通过打开 WebApi 原始响应日志排查。
 
+每次 MCP 到 WebApi 的业务请求还会输出独立的 `mcp_webapi_request_completed` 事件，包括成功请求。事件可记录 `traceId`、`webApiMethod`、`normalizedRoute`、`webApiStatus`、`webApiDurationMs`、稳定 `errorCode` 和失败阶段 `webApiFailurePhase`。对于 `403`，`authReasonState` 为 `accepted`、`missing` 或 `unrecognized`：后两者分别表示下游没有返回原因 header、或返回值不符合白名单；未知值原文不会记录。该事件绝不记录 host、query、请求/响应 body、header 原文、PAT、`Authorization`、session 或 PII。
+
 `HTTPS` 在所有合法环境均可使用。`production`、`staging`、未设置环境或非法环境均强制 `HTTPS`。只有显式 `TVCMALL_API_ENV=sandbox` 时，才允许 `http://` 指向 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。此校验不做 DNS 解析；普通域名、公网、链路本地 `169.254.0.0/16`、CGNAT `100.64.0.0/10` 与其他 IPv6 地址都被拒绝。所有环境仍拒绝 URL userinfo、query 和 fragment。
 
 ### 本地 sandbox 联调
