@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it, vi } from 'vitest';
-import { BaseHttpClient, type JsonObject } from '../../src/api/http-client.js';
+import { BaseHttpClient, WebApiRequestError, type JsonObject } from '../../src/api/http-client.js';
 import { registerTvcMallTools } from '../../src/app/register-tools.js';
 import { createPatAuthContext } from '../../src/auth/request-auth-context.js';
 import { FakeBalanceClient } from '../../src/balance/fake-balance-client.js';
@@ -23,6 +23,13 @@ class TestHttpClient extends BaseHttpClient {
     return this.readJson(response, 'TVCMall test request');
   }
 
+  async getWithAuthorization(): Promise<JsonObject> {
+    const response = await this.fetchImpl(this.createUrl('/test'), {
+      headers: { Authorization: `Bearer ${pat}` }
+    });
+    return this.readJson(response, 'TVCMall test request');
+  }
+
   async getRequest(request: Request): Promise<JsonObject> {
     const response = await this.fetchImpl(request);
     return this.readJson(response, 'TVCMall test request');
@@ -30,6 +37,60 @@ class TestHttpClient extends BaseHttpClient {
 }
 
 describe('BaseHttpClient WebApi errors', () => {
+  it('adds safe tracing headers and retains the allowed authorization reason for a 403', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ detail: upstreamBodySecret }), {
+      status: 403,
+      headers: {
+        'content-type': 'application/json',
+        'X-TVCMall-MCP-Auth-Reason': 'scope_missing'
+      }
+    }));
+    const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
+
+    const error = await client.getWithAuthorization().catch((caught: unknown) => caught);
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const headers = new Headers(init.headers);
+
+    expect(error).toBeInstanceOf(WebApiRequestError);
+    expect(error).toMatchObject({
+      code: 'PERMISSION_DENIED',
+      metadata: {
+        webApiMethod: 'GET',
+        normalizedRoute: 'test',
+        webApiStatus: 403,
+        authReason: 'scope_missing',
+        traceId: expect.stringMatching(/^[0-9a-f-]{36}$/)
+      }
+    });
+    expect(headers.get('Authorization')).toBe(`Bearer ${pat}`);
+    expect(headers.get('X-TVCMall-MCP-Client')).toBe('tvcmall-mcp-server');
+    expect(headers.get('X-TVCMall-MCP-Trace-Id')).toMatch(/^[0-9a-f-]{36}$/);
+    expect(JSON.stringify(error)).not.toContain(pat);
+    expect(JSON.stringify(error)).not.toContain(upstreamBodySecret);
+  });
+
+  it('ignores an unknown authorization reason response header', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ detail: upstreamBodySecret }), {
+      status: 403,
+      headers: { 'X-TVCMall-MCP-Auth-Reason': 'arbitrary-text' }
+    }));
+    const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
+
+    const error = await client.get().catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      code: 'PERMISSION_DENIED',
+      metadata: {
+        webApiMethod: 'GET',
+        normalizedRoute: 'test',
+        webApiStatus: 403,
+        traceId: expect.stringMatching(/^[0-9a-f-]{36}$/)
+      }
+    });
+    expect((error as WebApiRequestError).metadata?.authReason).toBeUndefined();
+    expect(JSON.stringify(error)).not.toContain('arbitrary-text');
+  });
+
   it.each([
     [401, 'AUTH_REQUIRED'],
     [403, 'PERMISSION_DENIED'],
@@ -73,7 +134,14 @@ describe('BaseHttpClient WebApi errors', () => {
       error = caught;
     }
 
-    expect(error).toMatchObject({ code: 'API_UNAVAILABLE' });
+    expect(error).toMatchObject({
+      code: 'API_UNAVAILABLE',
+      metadata: {
+        webApiMethod: 'GET',
+        normalizedRoute: 'test',
+        traceId: expect.stringMatching(/^[0-9a-f-]{36}$/)
+      }
+    });
     expect(String(error)).not.toContain(pat);
   });
 
@@ -91,7 +159,14 @@ describe('BaseHttpClient WebApi errors', () => {
       error = caught;
     }
 
-    expect(error).toMatchObject({ code: 'API_UNAVAILABLE' });
+    expect(error).toMatchObject({
+      code: 'API_UNAVAILABLE',
+      metadata: {
+        webApiMethod: 'GET',
+        normalizedRoute: 'test',
+        traceId: expect.stringMatching(/^[0-9a-f-]{36}$/)
+      }
+    });
     expect(String(error)).not.toContain(pat);
     expect(String(error)).not.toContain(upstreamBodySecret);
   });

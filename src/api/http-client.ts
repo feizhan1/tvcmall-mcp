@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { StoredAuthSession } from '../storage/token-store.js';
 
 export interface HttpClientOptions {
@@ -9,12 +10,28 @@ export interface HttpClientOptions {
 export type JsonObject = Record<string, unknown>;
 
 export type WebApiErrorCode = 'AUTH_REQUIRED' | 'PERMISSION_DENIED' | 'RATE_LIMITED' | 'API_UNAVAILABLE';
+export type WebApiAuthReason = 'scope_missing' | 'route_not_registered' | 'route_disabled';
+
+export interface WebApiRequestMetadata {
+  normalizedRoute: string;
+  traceId: string;
+  webApiMethod: string;
+}
+
+export interface WebApiFailureMetadata extends WebApiRequestMetadata {
+  authReason?: WebApiAuthReason;
+  webApiStatus?: number;
+}
 
 const PAT_PATTERN = /^tmcp_v1_[^\s.]+\.[^\s.]+$/;
 const MAX_TIMEOUT_MS = 2_147_483_647;
+const MCP_AUTH_REASON_HEADER = 'X-TVCMall-MCP-Auth-Reason';
+const MCP_CLIENT_HEADER = 'X-TVCMall-MCP-Client';
+const MCP_TRACE_ID_HEADER = 'X-TVCMall-MCP-Trace-Id';
+const WEB_API_AUTH_REASONS = new Set<WebApiAuthReason>(['scope_missing', 'route_not_registered', 'route_disabled']);
 
 export class WebApiRequestError extends Error {
-  constructor(readonly code: WebApiErrorCode) {
+  constructor(readonly code: WebApiErrorCode, readonly metadata?: WebApiFailureMetadata) {
     super(code);
     this.name = 'WebApiRequestError';
   }
@@ -25,12 +42,14 @@ export abstract class BaseHttpClient {
   protected readonly fetchImpl: typeof fetch;
   protected readonly timeoutMs: number;
   private readonly requestCleanups = new WeakMap<Response, () => void>();
+  private readonly requestMetadata = new WeakMap<Response, WebApiRequestMetadata>();
 
   constructor(options: HttpClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.timeoutMs = readTimeoutMs(options.timeoutMs);
     const fetchImpl = options.fetch ?? fetch;
     this.fetchImpl = (async (input: URL | RequestInfo, init?: RequestInit) => {
+      const metadata = createRequestMetadata(input, init);
       const controller = new AbortController();
       const callerSignals = new Set<AbortSignal>();
       if (init?.signal) callerSignals.add(init.signal);
@@ -53,12 +72,17 @@ export abstract class BaseHttpClient {
       };
 
       try {
-        const response = await fetchImpl(input, { ...init, signal: controller.signal });
+        const response = await fetchImpl(input, {
+          ...init,
+          headers: withTraceHeaders(input, init?.headers, metadata),
+          signal: controller.signal
+        });
         this.requestCleanups.set(response, cleanup);
+        this.requestMetadata.set(response, metadata);
         return response;
       } catch {
         cleanup();
-        throw new WebApiRequestError('API_UNAVAILABLE');
+        throw new WebApiRequestError('API_UNAVAILABLE', metadata);
       }
     }) as typeof fetch;
   }
@@ -84,27 +108,92 @@ export abstract class BaseHttpClient {
   }
 
   protected async readJson(response: Response, context: string): Promise<JsonObject> {
+    const metadata = this.requestMetadata.get(response);
     try {
       if (!response.ok) {
         cancelResponseBody(response);
-        throw new WebApiRequestError(webApiErrorCodeForStatus(response.status));
+        throw new WebApiRequestError(webApiErrorCodeForStatus(response.status), createFailureMetadata(response, metadata));
       }
 
       let parsed: unknown;
       try {
         parsed = await response.json() as unknown;
       } catch {
-        throw new WebApiRequestError('API_UNAVAILABLE');
+        throw new WebApiRequestError('API_UNAVAILABLE', metadata);
       }
       if (!isJsonObject(parsed)) {
-        throw new Error(`${context} response must be a JSON object`);
+        throw new WebApiRequestError('API_UNAVAILABLE', metadata);
       }
       return parsed;
     } finally {
       this.requestCleanups.get(response)?.();
       this.requestCleanups.delete(response);
+      this.requestMetadata.delete(response);
     }
   }
+}
+
+function createRequestMetadata(input: URL | RequestInfo, init?: RequestInit): WebApiRequestMetadata {
+  const url = requestUrl(input);
+  return {
+    normalizedRoute: normalizeRoute(url.pathname),
+    traceId: randomUUID(),
+    webApiMethod: (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
+  };
+}
+
+function requestUrl(input: URL | RequestInfo): URL {
+  if (input instanceof URL) return input;
+  if (typeof input === 'string') return new URL(input);
+  return new URL(input.url);
+}
+
+function normalizeRoute(pathname: string): string {
+  return pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+}
+
+function withTraceHeaders(
+  input: URL | RequestInfo,
+  initHeaders: HeadersInit | undefined,
+  metadata: WebApiRequestMetadata
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (input instanceof Request) copyHeaders(headers, input.headers);
+  copyHeaders(headers, initHeaders);
+  headers[MCP_CLIENT_HEADER] = 'tvcmall-mcp-server';
+  headers[MCP_TRACE_ID_HEADER] = metadata.traceId;
+  return headers;
+}
+
+function copyHeaders(target: Record<string, string>, source: HeadersInit | undefined): void {
+  if (!source) return;
+  if (source instanceof Headers) {
+    source.forEach((value, key) => {
+      target[key] = value;
+    });
+    return;
+  }
+  if (Array.isArray(source)) {
+    for (const [key, value] of source) target[key] = value;
+    return;
+  }
+  Object.assign(target, source);
+}
+
+function createFailureMetadata(response: Response, metadata: WebApiRequestMetadata | undefined): WebApiFailureMetadata | undefined {
+  if (!metadata) return undefined;
+  const authReason = readAuthReason(response);
+  return {
+    ...metadata,
+    ...(authReason ? { authReason } : {}),
+    webApiStatus: response.status
+  };
+}
+
+function readAuthReason(response: Response): WebApiAuthReason | undefined {
+  const headers = (response as unknown as { headers?: { get?(name: string): string | null } }).headers;
+  const value = headers?.get?.(MCP_AUTH_REASON_HEADER);
+  return value && WEB_API_AUTH_REASONS.has(value as WebApiAuthReason) ? value as WebApiAuthReason : undefined;
 }
 
 function readTimeoutMs(value: number | undefined): number {
