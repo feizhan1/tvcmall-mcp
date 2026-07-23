@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { StoredAuthSession } from '../storage/token-store.js';
+import {
+  createBodySnapshot,
+  createRequestBodySnapshot,
+  sanitizeHeaders,
+  sanitizeQuery,
+  type SafeLogRecord
+} from '../security/webapi-log-sanitizer.js';
 
 export interface HttpClientOptions {
   baseUrl: string;
@@ -14,6 +21,7 @@ export type WebApiErrorCode = 'AUTH_REQUIRED' | 'PERMISSION_DENIED' | 'RATE_LIMI
 export type WebApiAuthReason = 'scope_missing' | 'route_not_registered' | 'route_disabled';
 export type WebApiAuthReasonState = 'accepted' | 'missing' | 'unrecognized';
 export type WebApiFailurePhase = 'caller_cancelled' | 'http_response' | 'invalid_json' | 'network' | 'response_body' | 'timeout';
+export type WebApiResponseBodyState = 'complete' | 'empty' | 'read_failed' | 'unavailable';
 
 export interface WebApiRequestMetadata {
   normalizedRoute: string;
@@ -34,6 +42,17 @@ export interface WebApiRequestCompletedEvent extends WebApiRequestMetadata {
   authReasonState?: WebApiAuthReasonState;
   errorCode?: WebApiErrorCode;
   outcome: 'error' | 'success';
+  webApiRequestBody?: string;
+  webApiRequestBodyBytes?: number;
+  webApiRequestBodyTruncated?: boolean;
+  webApiRequestBodyType?: string;
+  webApiRequestHeaders: Record<string, string>;
+  webApiRequestQuery: SafeLogRecord;
+  webApiResponseBody?: string;
+  webApiResponseBodyBytes?: number;
+  webApiResponseBodyState: WebApiResponseBodyState;
+  webApiResponseBodyTruncated?: boolean;
+  webApiResponseHeaders?: Record<string, string>;
   webApiDurationMs: number;
   webApiFailurePhase?: WebApiFailurePhase;
   webApiStatus?: number;
@@ -43,6 +62,12 @@ interface TrackedRequestMetadata extends WebApiRequestMetadata {
   callerCancelled: boolean;
   startedAt: number;
   timeoutTriggered: boolean;
+  webApiRequestBody?: string;
+  webApiRequestBodyBytes?: number;
+  webApiRequestBodyTruncated?: boolean;
+  webApiRequestBodyType?: string;
+  webApiRequestHeaders: Record<string, string>;
+  webApiRequestQuery: SafeLogRecord;
 }
 
 const PAT_PATTERN = /^tmcp_v1_[^\s.]+\.[^\s.]+$/;
@@ -102,9 +127,11 @@ export abstract class BaseHttpClient {
       };
 
       try {
+        const headers = withTraceHeaders(input, init?.headers, metadata);
+        addRequestDiagnostics(metadata, requestUrl(input), init?.body, headers);
         const response = await fetchImpl(input, {
           ...init,
-          headers: withTraceHeaders(input, init?.headers, metadata),
+          headers,
           signal: controller.signal
         });
         this.requestCleanups.set(response, cleanup);
@@ -113,7 +140,7 @@ export abstract class BaseHttpClient {
       } catch {
         cleanup();
         const failure = createRequestFailureMetadata(metadata, failurePhaseFor(metadata));
-        this.emitFailure(failure, 'API_UNAVAILABLE');
+        this.emitFailure(failure, metadata, 'API_UNAVAILABLE', { webApiResponseBodyState: 'unavailable' });
         throw new WebApiRequestError('API_UNAVAILABLE', failure);
       }
     }) as typeof fetch;
@@ -139,32 +166,58 @@ export abstract class BaseHttpClient {
     };
   }
 
-  protected async readJson(response: Response, context: string): Promise<JsonObject> {
+  protected async readJson(response: Response, _context: string): Promise<JsonObject> {
     const metadata = this.requestMetadata.get(response);
     try {
+      const responseHeaders = sanitizeResponseHeaders(response);
+      let rawBody: string;
+      try {
+        rawBody = await response.text();
+      } catch {
+        const responseDiagnostics = {
+          ...(responseHeaders ? { webApiResponseHeaders: responseHeaders } : {}),
+          webApiResponseBodyState: 'read_failed' as const
+        };
+        if (!response.ok) {
+          const code = webApiErrorCodeForStatus(response.status);
+          const failure = createFailureMetadata(response, metadata);
+          if (failure && metadata) this.emitFailure(failure, metadata, code, responseDiagnostics);
+          throw new WebApiRequestError(code, failure);
+        }
+
+        const failure = metadata && createRequestFailureMetadata(metadata, failurePhaseFor(metadata, 'response_body'));
+        if (failure && metadata) this.emitFailure(failure, metadata, 'API_UNAVAILABLE', responseDiagnostics);
+        throw new WebApiRequestError('API_UNAVAILABLE', failure);
+      }
+
+      const responseDiagnostics = {
+        ...(responseHeaders ? { webApiResponseHeaders: responseHeaders } : {}),
+        ...createResponseBodyDiagnostics(rawBody)
+      };
       if (!response.ok) {
-        cancelResponseBody(response);
         const code = webApiErrorCodeForStatus(response.status);
         const failure = createFailureMetadata(response, metadata);
-        if (failure) this.emitFailure(failure, code);
+        if (failure && metadata) this.emitFailure(failure, metadata, code, responseDiagnostics);
         throw new WebApiRequestError(code, failure);
       }
 
       let parsed: unknown;
       try {
-        parsed = await response.json() as unknown;
+        parsed = JSON.parse(rawBody) as unknown;
       } catch {
-        const failure = metadata && createRequestFailureMetadata(metadata, failurePhaseFor(metadata, 'response_body'));
-        if (failure) this.emitFailure(failure, 'API_UNAVAILABLE');
+        const failure = metadata && createRequestFailureMetadata(metadata, 'invalid_json');
+        if (failure && metadata) this.emitFailure(failure, metadata, 'API_UNAVAILABLE', responseDiagnostics);
         throw new WebApiRequestError('API_UNAVAILABLE', failure);
       }
       if (!isJsonObject(parsed)) {
         const failure = metadata && createRequestFailureMetadata(metadata, 'invalid_json');
-        if (failure) this.emitFailure(failure, 'API_UNAVAILABLE');
+        if (failure && metadata) this.emitFailure(failure, metadata, 'API_UNAVAILABLE', responseDiagnostics);
         throw new WebApiRequestError('API_UNAVAILABLE', failure);
       }
       if (metadata) this.emitRequestCompleted({
         ...publicMetadata(metadata),
+        ...requestDiagnostics(metadata),
+        ...responseDiagnostics,
         outcome: 'success',
         webApiDurationMs: Date.now() - metadata.startedAt,
         webApiStatus: response.status
@@ -178,12 +231,23 @@ export abstract class BaseHttpClient {
   }
 
   private emitRequestCompleted(event: WebApiRequestCompletedEvent): void {
-    this.onWebApiRequestCompleted?.(event);
+    try {
+      this.onWebApiRequestCompleted?.(event);
+    } catch {
+      // Observability must not change the WebApi result or stable error mapping.
+    }
   }
 
-  private emitFailure(failure: WebApiFailureMetadata, errorCode: WebApiErrorCode): void {
+  private emitFailure(
+    failure: WebApiFailureMetadata,
+    metadata: TrackedRequestMetadata,
+    errorCode: WebApiErrorCode,
+    responseDiagnostics: WebApiResponseDiagnostics
+  ): void {
     this.emitRequestCompleted({
       ...failure,
+      ...requestDiagnostics(metadata),
+      ...responseDiagnostics,
       errorCode,
       outcome: 'error',
       webApiDurationMs: failure.webApiDurationMs ?? 0
@@ -199,7 +263,9 @@ function createRequestMetadata(input: URL | RequestInfo, init?: RequestInit): Tr
     startedAt: Date.now(),
     traceId: randomUUID(),
     timeoutTriggered: false,
-    webApiMethod: (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
+    webApiMethod: (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase(),
+    webApiRequestHeaders: {},
+    webApiRequestQuery: {}
   };
 }
 
@@ -270,6 +336,58 @@ function publicMetadata(metadata: TrackedRequestMetadata): WebApiRequestMetadata
   };
 }
 
+interface WebApiResponseDiagnostics {
+  webApiResponseBody?: string;
+  webApiResponseBodyBytes?: number;
+  webApiResponseBodyState: WebApiResponseBodyState;
+  webApiResponseBodyTruncated?: boolean;
+  webApiResponseHeaders?: Record<string, string>;
+}
+
+function addRequestDiagnostics(
+  metadata: TrackedRequestMetadata,
+  url: URL,
+  body: BodyInit | null | undefined,
+  headers: HeadersInit
+): void {
+  const snapshot = createRequestBodySnapshot(body);
+  metadata.webApiRequestHeaders = sanitizeHeaders(headers);
+  metadata.webApiRequestQuery = sanitizeQuery(url);
+  metadata.webApiRequestBody = snapshot.body;
+  metadata.webApiRequestBodyBytes = snapshot.bodyBytes;
+  metadata.webApiRequestBodyTruncated = snapshot.bodyTruncated;
+  metadata.webApiRequestBodyType = snapshot.bodyType;
+}
+
+function requestDiagnostics(metadata: TrackedRequestMetadata): Pick<
+  WebApiRequestCompletedEvent,
+  'webApiRequestBody' | 'webApiRequestBodyBytes' | 'webApiRequestBodyTruncated' | 'webApiRequestBodyType' | 'webApiRequestHeaders' | 'webApiRequestQuery'
+> {
+  return {
+    ...(metadata.webApiRequestBody === undefined ? {} : { webApiRequestBody: metadata.webApiRequestBody }),
+    ...(metadata.webApiRequestBodyBytes === undefined ? {} : { webApiRequestBodyBytes: metadata.webApiRequestBodyBytes }),
+    ...(metadata.webApiRequestBodyTruncated === undefined ? {} : { webApiRequestBodyTruncated: metadata.webApiRequestBodyTruncated }),
+    ...(metadata.webApiRequestBodyType === undefined ? {} : { webApiRequestBodyType: metadata.webApiRequestBodyType }),
+    webApiRequestHeaders: metadata.webApiRequestHeaders,
+    webApiRequestQuery: metadata.webApiRequestQuery
+  };
+}
+
+function createResponseBodyDiagnostics(rawBody: string): WebApiResponseDiagnostics {
+  const snapshot = createBodySnapshot(rawBody);
+  return {
+    webApiResponseBody: snapshot.body,
+    webApiResponseBodyBytes: snapshot.bodyBytes,
+    webApiResponseBodyState: rawBody ? 'complete' : 'empty',
+    webApiResponseBodyTruncated: snapshot.bodyTruncated
+  };
+}
+
+function sanitizeResponseHeaders(response: Response): Record<string, string> | undefined {
+  const headers = (response as unknown as { headers?: HeadersInit }).headers;
+  return headers ? sanitizeHeaders(headers) : undefined;
+}
+
 function failurePhaseFor(metadata: TrackedRequestMetadata, fallback: 'network' | 'response_body' = 'network'): WebApiFailurePhase {
   if (metadata.timeoutTriggered) return 'timeout';
   if (metadata.callerCancelled) return 'caller_cancelled';
@@ -291,15 +409,6 @@ function readTimeoutMs(value: number | undefined): number {
     throw new Error('HTTP client timeoutMs must be a positive safe integer');
   }
   return timeoutMs;
-}
-
-function cancelResponseBody(response: Response): void {
-  if (!response.body) return;
-  try {
-    void response.body.cancel().catch(() => undefined);
-  } catch {
-    // Body cancellation must not replace the stable WebApi status mapping.
-  }
 }
 
 function webApiErrorCodeForStatus(status: number): WebApiErrorCode {

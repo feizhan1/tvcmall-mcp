@@ -30,6 +30,21 @@ class TestHttpClient extends BaseHttpClient {
     return this.readJson(response, 'TVCMall test request');
   }
 
+  async postDiagnosticBody(): Promise<JsonObject> {
+    const response = await this.fetchImpl(this.createUrl('/test', {
+      email: 'buyer@example.com',
+      page: '2'
+    }), {
+      body: JSON.stringify({ password: 'plain-password', query: 'case' }),
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        'Content-Type': 'application/json'
+      },
+      method: 'POST'
+    });
+    return this.readJson(response, 'TVCMall test request');
+  }
+
   async getRequest(request: Request): Promise<JsonObject> {
     const response = await this.fetchImpl(request);
     return this.readJson(response, 'TVCMall test request');
@@ -48,14 +63,119 @@ describe('BaseHttpClient WebApi errors', () => {
 
     await expect(client.get()).resolves.toEqual({ ok: true });
 
-    expect(events).toContainEqual({
+    expect(events).toContainEqual(expect.objectContaining({
       outcome: 'success',
       normalizedRoute: 'test',
       traceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       webApiDurationMs: expect.any(Number),
       webApiMethod: 'GET',
       webApiStatus: 200
+    }));
+  });
+
+  it('records a redacted request and response diagnostic snapshot for a successful request', async () => {
+    const events: unknown[] = [];
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200
+    }));
+    const client = new TestHttpClient({
+      baseUrl: 'https://webapi.test',
+      fetch: fetchImpl as typeof fetch,
+      onWebApiRequestCompleted: (event: unknown) => events.push(event)
     });
+
+    await expect(client.postDiagnosticBody()).resolves.toEqual({ ok: true });
+
+    expect(events).toContainEqual(expect.objectContaining({
+      outcome: 'success',
+      webApiRequestBody: expect.stringContaining('"query":"case"'),
+      webApiRequestHeaders: expect.objectContaining({
+        authorization: '[REDACTED]',
+        'content-type': 'application/json',
+        'x-tvcmall-mcp-trace-id': expect.stringMatching(/^[0-9a-f-]{36}$/)
+      }),
+      webApiRequestQuery: { email: '[REDACTED]', page: '2' },
+      webApiResponseBody: expect.stringContaining('"ok":true'),
+      webApiResponseBodyState: 'complete',
+      webApiResponseHeaders: expect.objectContaining({ 'content-type': 'application/json' })
+    }));
+    expect(JSON.stringify(events)).not.toContain(pat);
+    expect(JSON.stringify(events)).not.toContain('buyer@example.com');
+    expect(JSON.stringify(events)).not.toContain('plain-password');
+  });
+
+  it('records a redacted WebApi error body while preserving the 403 error mapping', async () => {
+    const events: unknown[] = [];
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      code: 'ROUTE_NOT_ALLOWED',
+      message: 'method and route are not registered',
+      password: 'never-log-me'
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 403
+    }));
+    const client = new TestHttpClient({
+      baseUrl: 'https://webapi.test',
+      fetch: fetchImpl as typeof fetch,
+      onWebApiRequestCompleted: (event: unknown) => events.push(event)
+    });
+
+    const error = await client.getWithAuthorization().catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ code: 'PERMISSION_DENIED' });
+    expect(JSON.stringify(error)).not.toContain('ROUTE_NOT_ALLOWED');
+    expect(events).toContainEqual(expect.objectContaining({
+      authReasonState: 'missing',
+      errorCode: 'PERMISSION_DENIED',
+      outcome: 'error',
+      webApiResponseBody: expect.stringContaining('ROUTE_NOT_ALLOWED'),
+      webApiResponseBodyState: 'complete',
+      webApiStatus: 403
+    }));
+    expect(JSON.stringify(events)).not.toContain('never-log-me');
+  });
+
+  it('preserves the 403 mapping when its response body cannot be read', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 403,
+      text: vi.fn(async () => {
+        throw new Error('response stream interrupted');
+      })
+    }) as unknown as Response);
+    const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
+
+    await expect(client.get()).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED',
+      metadata: { webApiStatus: 403 }
+    });
+  });
+
+  it('does not change a successful WebApi result when the diagnostics callback throws', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const client = new TestHttpClient({
+      baseUrl: 'https://webapi.test',
+      fetch: fetchImpl as typeof fetch,
+      onWebApiRequestCompleted: () => {
+        throw new Error('diagnostic sink unavailable');
+      }
+    });
+
+    await expect(client.get()).resolves.toEqual({ ok: true });
+  });
+
+  it('does not change the 403 mapping when the diagnostics callback throws', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ code: 'ROUTE_NOT_ALLOWED' }), { status: 403 }));
+    const client = new TestHttpClient({
+      baseUrl: 'https://webapi.test',
+      fetch: fetchImpl as typeof fetch,
+      onWebApiRequestCompleted: () => {
+        throw new Error('diagnostic sink unavailable');
+      }
+    });
+
+    await expect(client.get()).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
   });
 
   it('adds safe tracing headers and retains the allowed authorization reason for a 403', async () => {
@@ -93,7 +213,7 @@ describe('BaseHttpClient WebApi errors', () => {
     expect(headers.get('X-TVCMall-MCP-Trace-Id')).toMatch(/^[0-9a-f-]{36}$/);
     expect(JSON.stringify(error)).not.toContain(pat);
     expect(JSON.stringify(error)).not.toContain(upstreamBodySecret);
-    expect(events).toContainEqual({
+    expect(events).toContainEqual(expect.objectContaining({
       outcome: 'error',
       errorCode: 'PERMISSION_DENIED',
       webApiFailurePhase: 'http_response',
@@ -104,7 +224,7 @@ describe('BaseHttpClient WebApi errors', () => {
       webApiDurationMs: expect.any(Number),
       webApiMethod: 'GET',
       webApiStatus: 403
-    });
+    }));
   });
 
   it('ignores an unknown authorization reason response header', async () => {
@@ -147,13 +267,10 @@ describe('BaseHttpClient WebApi errors', () => {
     [429, 'RATE_LIMITED'],
     [400, 'API_UNAVAILABLE'],
     [503, 'API_UNAVAILABLE']
-  ] as const)('maps HTTP %s without reading or exposing its response body', async (status, code) => {
+  ] as const)('maps HTTP %s after safely reading its response body', async (status, code) => {
     const json = vi.fn(async () => ({ detail: upstreamBodySecret }));
     const text = vi.fn(async () => upstreamBodySecret);
-    const cancel = vi.fn(async () => {
-      throw new Error(`body cancellation failed for ${pat}: ${upstreamBodySecret}`);
-    });
-    const fetchImpl = vi.fn(async () => ({ ok: false, status, body: { cancel }, json, text }) as unknown as Response);
+    const fetchImpl = vi.fn(async () => ({ ok: false, status, json, text }) as unknown as Response);
     const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
 
     let error: unknown;
@@ -166,9 +283,8 @@ describe('BaseHttpClient WebApi errors', () => {
     expect(error).toMatchObject({ code });
     expect(String(error)).not.toContain(upstreamBodySecret);
     expect(String(error)).not.toContain(pat);
-    expect(cancel).toHaveBeenCalledOnce();
     expect(json).not.toHaveBeenCalled();
-    expect(text).not.toHaveBeenCalled();
+    expect(text).toHaveBeenCalledOnce();
   });
 
   it('maps network and timeout failures without exposing the original error', async () => {
@@ -196,10 +312,10 @@ describe('BaseHttpClient WebApi errors', () => {
   });
 
   it('maps response body read failures without exposing the original error', async () => {
-    const json = vi.fn(async () => {
+    const text = vi.fn(async () => {
       throw new TypeError(`response body interrupted for ${pat}: ${upstreamBodySecret}`);
     });
-    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json }) as unknown as Response);
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, text }) as unknown as Response);
     const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch });
 
     let error: unknown;
@@ -255,7 +371,7 @@ describe('BaseHttpClient WebApi errors', () => {
     try {
       let observedSignal: AbortSignal | undefined;
       let rejectBody: ((reason?: unknown) => void) | undefined;
-      const json = vi.fn(() => new Promise<unknown>((_resolve, reject) => {
+      const text = vi.fn(() => new Promise<string>((_resolve, reject) => {
         rejectBody = reject;
         observedSignal?.addEventListener('abort', () => {
           reject(new DOMException(`body aborted for ${pat}: ${upstreamBodySecret}`, 'AbortError'));
@@ -263,13 +379,13 @@ describe('BaseHttpClient WebApi errors', () => {
       }));
       const fetchImpl = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
         observedSignal = init?.signal ?? undefined;
-        return { ok: true, status: 200, json } as unknown as Response;
+        return { ok: true, status: 200, text } as unknown as Response;
       });
       const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch, timeoutMs: 25 });
 
       const result = client.get().catch((error: unknown) => error);
       await vi.advanceTimersByTimeAsync(0);
-      expect(json).toHaveBeenCalledOnce();
+      expect(text).toHaveBeenCalledOnce();
       await vi.advanceTimersByTimeAsync(25);
       const wasAborted = observedSignal?.aborted === true;
       if (!wasAborted) rejectBody?.(new DOMException('test cleanup', 'AbortError'));
@@ -290,7 +406,7 @@ describe('BaseHttpClient WebApi errors', () => {
       const abortListener = vi.fn();
       const fetchImpl = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
         init?.signal?.addEventListener('abort', abortListener);
-        return { ok: true, status: 200, json: vi.fn(async () => ({ ok: true })) } as unknown as Response;
+        return { ok: true, status: 200, text: vi.fn(async () => JSON.stringify({ ok: true })) } as unknown as Response;
       });
       const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch, timeoutMs: 25 });
 
@@ -360,7 +476,7 @@ describe('BaseHttpClient WebApi errors', () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: vi.fn(async () => ({ request: 'completed' }))
+          text: vi.fn(async () => JSON.stringify({ request: 'completed' }))
         } as unknown as Response);
       });
       const client = new TestHttpClient({ baseUrl: 'https://webapi.test', fetch: fetchImpl as typeof fetch, timeoutMs: 25 });

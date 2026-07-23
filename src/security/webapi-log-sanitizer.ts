@@ -39,12 +39,17 @@ const SENSITIVE_KEY_PARTS = [
   'token'
 ] as const;
 
+const MCP_AUTH_REASON_HEADER = 'x-tvcmall-mcp-auth-reason';
+const SAFE_MCP_AUTH_REASONS = new Set(['scope_missing', 'route_not_registered', 'route_disabled']);
+
 export function sanitizeHeaders(source: HeadersInit | undefined): Record<string, string> {
   if (!source) return {};
 
   const result: Record<string, string> = {};
   new Headers(source).forEach((value, key) => {
-    result[key] = isSensitiveKey(key) ? REDACTED_LOG_VALUE : maskFreeText(value);
+    result[key] = isSensitiveKey(key) || isUnrecognizedMcpAuthReason(key, value)
+      ? REDACTED_LOG_VALUE
+      : maskFreeText(value);
   });
   return result;
 }
@@ -120,16 +125,26 @@ function isSensitiveKey(key: string): boolean {
 }
 
 function maskFreeText(value: string): string {
-  return value
+  const protectedUuids: string[] = [];
+  const withProtectedUuids = value.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, (uuid) => {
+    protectedUuids.push(uuid);
+    return `__TVCMALL_UUID_${protectedUuids.length - 1}__`;
+  });
+  const redacted = withProtectedUuids
     .replace(/Bearer\s+[^\s"',;]+/gi, 'Bearer [REDACTED]')
     .replace(/tmcp_v1_[^\s"',;]+/gi, REDACTED_LOG_VALUE)
     .replace(/\b(?:access[_-]?token|api[_-]?key|authorization|cookie|password|secret|token)\s*([=:])\s*[^\s&;,"']+/gi, (_match, separator: string) => `${separator}${REDACTED_LOG_VALUE}`)
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, REDACTED_LOG_VALUE)
     .replace(/\+?\d[\d\s().-]{7,}\d/g, (matched) => isUuid(matched) ? matched : REDACTED_LOG_VALUE);
+  return redacted.replace(/__TVCMALL_UUID_(\d+)__/g, (_match, index: string) => protectedUuids[Number(index)] ?? REDACTED_LOG_VALUE);
 }
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isUnrecognizedMcpAuthReason(key: string, value: string): boolean {
+  return key === MCP_AUTH_REASON_HEADER && !SAFE_MCP_AUTH_REASONS.has(value);
 }
 
 function truncateUtf8(value: string, maxBytes: number): { value: string; truncated: boolean } {
