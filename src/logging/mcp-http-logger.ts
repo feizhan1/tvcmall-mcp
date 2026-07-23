@@ -1,5 +1,6 @@
 import type { TvcMallLogLevel } from '../config/runtime-config.js';
 import type { McpErrorCode } from '../errors/mcp-errors.js';
+import type { WebApiFailureMetadata } from '../api/http-client.js';
 
 export interface LogOutput {
   write(chunk: string): unknown;
@@ -27,6 +28,11 @@ export type TvcMallToolName =
   | 'tvcmall_get_tracking_info'
   | 'tvcmall_batch_get_tracking';
 
+type ToolWebApiDiagnostics = Pick<
+  WebApiFailureMetadata,
+  'authReason' | 'normalizedRoute' | 'traceId' | 'webApiMethod' | 'webApiStatus'
+>;
+
 export interface McpHttpLogger {
   serverStarted(details: { host: string; mcpPath: string; port: number }): void;
   requestCompleted(details: {
@@ -39,10 +45,15 @@ export interface McpHttpLogger {
   }): void;
   sessionEvent(event: 'mcp_session_created' | 'mcp_session_closed' | 'mcp_session_idle_expired'): void;
   toolCompleted(details: {
+    authReason?: ToolWebApiDiagnostics['authReason'];
     durationMs: number;
     errorCode?: McpErrorCode;
+    normalizedRoute?: ToolWebApiDiagnostics['normalizedRoute'];
     outcome: 'error' | 'success';
+    traceId?: ToolWebApiDiagnostics['traceId'];
     toolName: TvcMallToolName;
+    webApiMethod?: ToolWebApiDiagnostics['webApiMethod'];
+    webApiStatus?: ToolWebApiDiagnostics['webApiStatus'];
   }): void;
 }
 
@@ -84,8 +95,18 @@ export function createMcpHttpLogger(options: {
     sessionEvent(event) {
       write('debug', event, {});
     },
-    toolCompleted({ durationMs, errorCode, outcome, toolName }) {
-      write(outcome === 'error' ? 'warn' : 'info', 'mcp_tool_completed', { durationMs, errorCode, outcome, toolName });
+    toolCompleted({ authReason, durationMs, errorCode, normalizedRoute, outcome, traceId, toolName, webApiMethod, webApiStatus }) {
+      write(outcome === 'error' ? 'warn' : 'info', 'mcp_tool_completed', {
+        authReason,
+        durationMs,
+        errorCode,
+        normalizedRoute,
+        outcome,
+        traceId,
+        toolName,
+        webApiMethod,
+        webApiStatus
+      });
     }
   };
 }
