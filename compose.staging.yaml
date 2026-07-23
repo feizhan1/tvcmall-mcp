@@ -3,7 +3,7 @@ services:
     image: ${TVCMALL_MCP_IMAGE:?请设置 TVCMALL_MCP_IMAGE}
     restart: unless-stopped
     ports:
-      - "${TVCMALL_MCP_BIND_ADDRESS:-127.0.0.1}:${TVCMALL_MCP_PORT:-3000}:3000"
+      - "${TVCMALL_MCP_BIND_ADDRESS:-127.0.0.1}:${TVCMALL_MCP_PORT:-8090}:3000"
     environment:
       TVCMALL_WEBAPI_BASE_URL: ${TVCMALL_WEBAPI_BASE_URL:?请设置 TVCMALL_WEBAPI_BASE_URL}
       TVCMALL_API_ENV: staging

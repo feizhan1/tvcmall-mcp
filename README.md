@@ -128,7 +128,7 @@ docker compose -f compose.production.yaml up -d
 
 部署主机位于阿里云深圳 VPC 时，可将镜像地址的 registry host 替换为 `crpi-xjd40982wqk3bdon-vpc.cn-shenzhen.personal.cr.aliyuncs.com`，通过专有网络拉取同一镜像。
 
-Compose 默认将容器 `3000` 端口绑定到宿主机 `127.0.0.1:3000`，供宿主机的 TLS 反向代理访问。仅在受控的内网中确有需要时，才指定对外绑定地址或变更宿主机端口：
+Compose 默认将容器 `3000` 端口绑定到宿主机 `127.0.0.1:8090`，供宿主机的 TLS 反向代理访问。仅在受控的内网中确有需要时，才指定对外绑定地址或变更宿主机端口：
 
 ```bash
 TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose.production.yaml up -d
