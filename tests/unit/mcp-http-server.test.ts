@@ -3,7 +3,8 @@ import { Readable } from 'node:stream';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { RequestAuthContext } from '../../src/auth/request-auth-context.js';
-import { createMcpHttpServer, type McpHttpServerOptions } from '../../src/http/mcp-http-server.js';
+import { createMcpHttpServer, startMcpHttpServer, type McpHttpServerOptions } from '../../src/http/mcp-http-server.js';
+import type { McpHttpLogger } from '../../src/logging/mcp-http-logger.js';
 
 interface TransportDouble {
   close: Mock<() => Promise<void>>;
@@ -74,6 +75,52 @@ interface DispatchResult {
 }
 
 describe('createMcpHttpServer', () => {
+  it('logs an initialized MCP request without its credential, session, or body', async () => {
+    const logger = new RecordingLogger();
+    const apiKey = 'tmcp_v1_logging-test.secret-value';
+
+    await initialize(createTestServer({ logger }), apiKey);
+
+    expect(logger.requests).toContainEqual(expect.objectContaining({
+      httpMethod: 'POST',
+      httpStatus: 200,
+      jsonRpcMethod: 'initialize',
+      requestType: 'mcp'
+    }));
+    expect(JSON.stringify(logger)).not.toContain(apiKey);
+    expect(JSON.stringify(logger)).not.toContain('clientInfo');
+    expect(JSON.stringify(logger)).not.toContain('secret-value');
+  });
+
+  it('logs a stable HTTP error code without the rejected credential', async () => {
+    const logger = new RecordingLogger();
+    const apiKey = 'tmcp_v1_invalid.secret-value';
+
+    await dispatch({
+      server: createTestServer({ logger }),
+      method: 'POST',
+      apiKey,
+      authorization: 'Bearer legacy',
+      body: initializeRequest()
+    });
+
+    expect(logger.requests).toContainEqual(expect.objectContaining({ httpStatus: 401, errorCode: 'AUTH_REQUIRED' }));
+    expect(JSON.stringify(logger)).not.toContain(apiKey);
+  });
+
+  it('logs the resolved listening address when starting the HTTP server', async () => {
+    const logger = new RecordingLogger();
+    const server = await startMcpHttpServer({ host: '127.0.0.1', port: 0, logger });
+
+    try {
+      expect(logger.started).toEqual([expect.objectContaining({ host: '127.0.0.1', mcpPath: '/mcp', port: expect.any(Number) })]);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
+  });
+
   it('does not require an API key verifier', () => {
     expect(() => createMcpHttpServer()).not.toThrow();
   });
@@ -457,6 +504,7 @@ async function dispatch(options: DispatchOptions): Promise<DispatchResult> {
 
 interface TestServerOptions {
   connect?: (index: number) => Promise<void>;
+  logger?: McpHttpLogger;
   maxSessions?: number;
   onAuthContext?: (authContext: RequestAuthContext) => void;
   sessionIdleTtlMs?: number;
@@ -480,10 +528,28 @@ function createTestServer(options: TestServerOptions | ((authContext: RequestAut
         }
       } as never;
     },
+    logger: normalizedOptions.logger,
     maxSessions: normalizedOptions.maxSessions,
     sessionIdleTtlMs: normalizedOptions.sessionIdleTtlMs
   } as McpHttpServerOptions;
   return trackServer(createMcpHttpServer(httpOptions));
+}
+
+class RecordingLogger implements McpHttpLogger {
+  readonly requests: Parameters<McpHttpLogger['requestCompleted']>[0][] = [];
+  readonly started: Parameters<McpHttpLogger['serverStarted']>[0][] = [];
+
+  requestCompleted(details: Parameters<McpHttpLogger['requestCompleted']>[0]): void {
+    this.requests.push(details);
+  }
+
+  serverStarted(details: Parameters<McpHttpLogger['serverStarted']>[0]): void {
+    this.started.push(details);
+  }
+
+  sessionEvent(): void {}
+
+  toolCompleted(): void {}
 }
 
 function initialize(server: Server, pat: string): Promise<DispatchResult> {

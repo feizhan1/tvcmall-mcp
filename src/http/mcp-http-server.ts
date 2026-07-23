@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createPatAuthContext, type RequestAuthContext } from '../auth/request-auth-context.js';
+import { createMcpHttpLogger, NOOP_MCP_HTTP_LOGGER, type McpHttpErrorCode, type McpHttpLogger } from '../logging/mcp-http-logger.js';
 import { createTvcMallMcpServer } from '../server.js';
 import { sendHttpError } from './http-errors.js';
 import { readJsonBody } from './request-body.js';
@@ -27,13 +28,15 @@ export interface McpHttpServerOptions {
   mcpPath?: string;
   maxSessions?: number;
   sessionIdleTtlMs?: number;
-  createMcpServer?: (authContext: RequestAuthContext) => McpServer;
+  logger?: McpHttpLogger;
+  createMcpServer?: (authContext: RequestAuthContext, logger: McpHttpLogger) => McpServer;
 }
 
 export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server {
   const sessions = new Map<string, Session>();
   const managedConnections = new Set<Session>();
   const mcpPath = options.mcpPath ?? '/mcp';
+  const logger = options.logger ?? NOOP_MCP_HTTP_LOGGER;
   const maxSessions = readPositiveIntegerOption(options.maxSessions, DEFAULT_MAX_SESSIONS, 'maxSessions');
   const sessionIdleTtlMs = readPositiveIntegerOption(
     options.sessionIdleTtlMs,
@@ -41,7 +44,7 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
     'sessionIdleTtlMs',
     MAX_TIMER_DELAY_MS
   );
-  const createMcpServer = options.createMcpServer ?? ((authContext) => createTvcMallMcpServer({ authContext }));
+  const createMcpServer = options.createMcpServer ?? ((authContext, requestLogger) => createTvcMallMcpServer({ authContext, logger: requestLogger }));
   let pendingInitializations = 0;
   let shuttingDown = false;
 
@@ -55,9 +58,11 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
   }
 
   function markConnectionClosed(session: Session): void {
+    const wasClosed = session.closed;
     session.closed = true;
     session.closing = false;
     detachConnection(session);
+    if (!wasClosed) logger.sessionEvent('mcp_session_closed');
   }
 
   async function closeTransportSafely(transport: StreamableHTTPServerTransport): Promise<void> {
@@ -81,9 +86,11 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
     } catch {
       if (session.connected) await closeTransportSafely(session.transport);
     } finally {
+      const wasClosed = session.closed;
       session.closed = true;
       session.closing = false;
       detachConnection(session);
+      if (!wasClosed) logger.sessionEvent('mcp_session_closed');
     }
   }
 
@@ -94,12 +101,25 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
 
     session.idleTimer = setTimeout(() => {
       session.idleTimer = undefined;
+      logger.sessionEvent('mcp_session_idle_expired');
       void closeConnection(session);
     }, sessionIdleTtlMs);
     session.idleTimer.unref();
   }
 
   const httpServer = createServer(async (req, res) => {
+    const startedAt = Date.now();
+    const requestLog: {
+      errorCode?: McpHttpErrorCode;
+      jsonRpcMethod?: string;
+      requestType: 'healthz' | 'mcp';
+    } = { requestType: req.url === '/healthz' ? 'healthz' : 'mcp' };
+
+    function sendLoggedHttpError(status: 400 | 401 | 404 | 429 | 503, code: McpHttpErrorCode): void {
+      requestLog.errorCode = code;
+      sendHttpError(res, status, code);
+    }
+
     try {
       if (req.url === '/healthz' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -107,20 +127,20 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
         return;
       }
       if (new URL(req.url ?? '/', 'http://localhost').pathname !== mcpPath) {
-        sendHttpError(res, 404, 'NOT_FOUND');
+        sendLoggedHttpError(404, 'NOT_FOUND');
         return;
       }
 
       const pat = readTvcMallApiKey(req);
       if (!pat) {
-        sendHttpError(res, 401, 'AUTH_REQUIRED');
+        sendLoggedHttpError(401, 'AUTH_REQUIRED');
         return;
       }
       let authContext: RequestAuthContext;
       try {
         authContext = createPatAuthContext(pat);
       } catch {
-        sendHttpError(res, 401, 'AUTH_REQUIRED');
+        sendLoggedHttpError(401, 'AUTH_REQUIRED');
         return;
       }
 
@@ -128,11 +148,11 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
       if (typeof sessionId === 'string') {
         const session = sessions.get(sessionId);
         if (!session) {
-          sendHttpError(res, 404, 'SESSION_NOT_FOUND');
+          sendLoggedHttpError(404, 'SESSION_NOT_FOUND');
           return;
         }
         if (session.patFingerprint !== authContext.patFingerprint) {
-          sendHttpError(res, 401, 'AUTH_REQUIRED');
+          sendLoggedHttpError(401, 'AUTH_REQUIRED');
           return;
         }
 
@@ -142,7 +162,9 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
           session.idleTimer = undefined;
         }
         try {
-          await session.transport.handleRequest(req, res, req.method === 'POST' ? await readJsonBody(req) : undefined);
+          const body = req.method === 'POST' ? await readJsonBody(req) : undefined;
+          requestLog.jsonRpcMethod = readJsonRpcMethod(body);
+          await session.transport.handleRequest(req, res, body);
         } finally {
           session.activeRequests -= 1;
           refreshIdleTimer(session);
@@ -151,16 +173,17 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
       }
 
       if (req.method !== 'POST') {
-        sendHttpError(res, 400, 'SESSION_REQUIRED');
+        sendLoggedHttpError(400, 'SESSION_REQUIRED');
         return;
       }
       const body = await readJsonBody(req);
+      requestLog.jsonRpcMethod = readJsonRpcMethod(body);
       if (!isInitializeRequest(body)) {
-        sendHttpError(res, 400, 'INITIALIZE_REQUIRED');
+        sendLoggedHttpError(400, 'INITIALIZE_REQUIRED');
         return;
       }
       if (sessions.size + pendingInitializations >= maxSessions) {
-        sendHttpError(res, 503, 'SESSION_CAPACITY_REACHED');
+        sendLoggedHttpError(503, 'SESSION_CAPACITY_REACHED');
         return;
       }
 
@@ -170,7 +193,7 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
       try {
         const id = randomUUID();
         transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => id });
-        const mcpServer = createMcpServer(authContext);
+        const mcpServer = createMcpServer(authContext, logger);
         connection = {
           activeRequests: 0,
           closed: false,
@@ -198,6 +221,7 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
         }
 
         sessions.set(id, connection);
+        logger.sessionEvent('mcp_session_created');
         refreshIdleTimer(connection);
       } catch {
         if (connection) {
@@ -205,13 +229,20 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
         } else if (transport) {
           await closeTransportSafely(transport);
         }
-        if (!res.headersSent) sendHttpError(res, 400, 'INVALID_REQUEST');
+        if (!res.headersSent) sendLoggedHttpError(400, 'INVALID_REQUEST');
       } finally {
         pendingInitializations -= 1;
       }
     } catch {
       if (res.headersSent) return;
-      sendHttpError(res, 400, 'INVALID_REQUEST');
+      sendLoggedHttpError(400, 'INVALID_REQUEST');
+    } finally {
+      logger.requestCompleted({
+        ...requestLog,
+        durationMs: Date.now() - startedAt,
+        httpMethod: req.method ?? 'UNKNOWN',
+        httpStatus: res.statusCode
+      });
     }
   });
 
@@ -232,7 +263,8 @@ export function createMcpHttpServer(options: McpHttpServerOptions = {}): Server 
 }
 
 export async function startMcpHttpServer(options: McpHttpServerOptions & { host: string; port: number }): Promise<Server> {
-  const server = createMcpHttpServer(options);
+  const logger = options.logger ?? createMcpHttpLogger();
+  const server = createMcpHttpServer({ ...options, logger });
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(options.port, options.host, () => {
@@ -240,6 +272,9 @@ export async function startMcpHttpServer(options: McpHttpServerOptions & { host:
       resolve();
     });
   });
+  const address = server.address();
+  const port = typeof address === 'object' && address !== null ? address.port : options.port;
+  logger.serverStarted({ host: options.host, mcpPath: options.mcpPath ?? '/mcp', port });
   return server;
 }
 
@@ -253,6 +288,12 @@ function readTvcMallApiKey(req: IncomingMessage): string | undefined {
 
 function isInitializeRequest(body: unknown): boolean {
   return typeof body === 'object' && body !== null && (body as { method?: unknown }).method === 'initialize';
+}
+
+function readJsonRpcMethod(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const method = (body as { method?: unknown }).method;
+  return typeof method === 'string' ? method : undefined;
 }
 
 function readPositiveIntegerOption(value: number | undefined, fallback: number, name: string, maximum = Number.MAX_SAFE_INTEGER): number {
