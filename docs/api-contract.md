@@ -123,9 +123,9 @@ X-TVCMall-MCP-Auth-Reason: scope_missing | route_not_registered | route_disabled
 | `route_not_registered` | method + normalized route 未登记到 allowlist |
 | `route_disabled` | route 已登记但 `enabled=0` |
 
-MCP 只读取 HTTP status 和这个单一 response header，不读取失败 response body；只有精确匹配表中值的 `authReason` 才写入失败 tool 日志。header 缺失或未知值时省略 `authReason`，并通过 trace ID 查询 WebApi/ApplicationServices 审计日志。该可选 header 只帮助诊断，绝不改变 WebApi 的授权决定或 MCP tool 的稳定错误码。
+MCP 的稳定 tool 错误码只依赖 HTTP status 和这个单一 response header；失败 response body 不进入 `WebApiRequestError`、MCP tool 输出或 `mcp_tool_completed`。为排障，MCP 会读取 response body 并仅将强制脱敏、截断后的快照写入 `mcp_webapi_request_completed.webApiResponseBody`。header 缺失或未知值时省略 `authReason`，并通过 trace ID 查询 WebApi/ApplicationServices 审计日志。该可选 header 只帮助诊断，绝不改变 WebApi 的授权决定或 MCP tool 的稳定错误码。
 
-远程 HTTP 服务对每次下游业务 WebApi 请求写入 `mcp_webapi_request_completed`。成功事件包含 trace、method、normalized route、HTTP status 和耗时；失败事件额外包含稳定错误码及 `webApiFailurePhase`。对 `403`，`authReasonState=accepted` 表示已接受白名单原因，`missing` 表示未返回 header，`unrecognized` 表示返回值不在白名单。该事件不记录原始 header 值、host、query、body、PAT、`Authorization`、session 或 PII。
+远程 HTTP 服务对每次下游业务 WebApi 请求写入一条 `mcp_webapi_request_completed`。事件包含 trace、method、normalized route、HTTP status、耗时；失败事件额外包含稳定错误码及 `webApiFailurePhase`。同时记录 `webApiRequestQuery`、`webApiRequestHeaders`、`webApiRequestBody`、`webApiResponseHeaders`、`webApiResponseBody`；`webApiRequestBodyBytes`、`webApiResponseBodyBytes`、`webApiRequestBodyTruncated`、`webApiResponseBodyTruncated` 和 `webApiResponseBodyState` 描述 payload 完整性。每个 body 快照最多 16 KiB UTF-8，并在强制脱敏后截断。对 `403`，`authReasonState=accepted` 表示已接受白名单原因，`missing` 表示未返回 header，`unrecognized` 表示返回值不在白名单。事件不记录原始未脱敏 header/query/body、host、userinfo、PAT、`Authorization`、session 或 PII。
 
 ### 4.1.2 WebApi 传输环境
 
@@ -394,7 +394,7 @@ WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/sc
 
 PAT 不属于 server runtime config。禁止以环境变量配置一个供所有客户共享的 PAT。
 
-远程 Streamable HTTP 入口将普通诊断日志写到 stderr，使用一行一个 JSON 对象。默认 `info` 输出服务启动、MCP 请求完成和已执行 tool 的完成记录；`debug` 追加 session 生命周期，`warn` / `error` 按严重级别过滤，只有显式 `silent` 完全关闭普通日志。对于失败的下游 WebApi tool 调用，完成记录还可包含 `webApiMethod`、`normalizedRoute`、`webApiStatus`、UUID `traceId` 和白名单 `authReason`。日志仅允许这些受控字段、事件名、HTTP method/status、JSON-RPC method、预定义 tool 名、稳定错误码、耗时和监听配置；不得记录入站 header、PAT、`Authorization`、MCP 参数、session ID、完整 URL/query、WebApi 正文、堆栈或 PII。
+远程 Streamable HTTP 入口将普通诊断日志写到 stderr，使用一行一个 JSON 对象。默认 `info` 输出服务启动、MCP 请求完成、已执行 tool 的完成记录，以及每次下游 WebApi 请求的详细完成事件；`debug` 追加 session 生命周期，`warn` / `error` 按严重级别过滤，只有显式 `silent` 完全关闭普通日志。对于失败的下游 WebApi tool 调用，摘要完成记录可包含 `webApiMethod`、`normalizedRoute`、`webApiStatus`、UUID `traceId` 和白名单 `authReason`。详细 `mcp_webapi_request_completed` 事件可包含脱敏后的 `webApiRequestHeaders`、`webApiRequestQuery`、request/response body 和 response headers；不得记录入站 header、未脱敏的 PAT、`Authorization`、Cookie、MCP 参数、session ID、完整 URL、原始 WebApi 正文、堆栈或 PII。
 
 `.env.example` 仅提供泛化的 sandbox 本地配置；开发者可在 Git 忽略的 `.env.local` 填入受控 WebApi 地址，并通过 `npm run dev:local` 或 `npm run start:local` 显式加载。`.env.local` 禁止包含 `TVCMALL_API_KEY` 或 PAT，原 `dev` / `start` 和生产部署不自动读取该文件。
 
@@ -410,5 +410,5 @@ PAT 不属于 server runtime config。禁止以环境变量配置一个供所有
 - [ ] `catalog.read` 与 `order.read` 由 ApplicationServices/RDS 判断，MCP 不做本地 scope 放行。
 - [ ] 401/403/429/5xx、网络、超时与 body read failure 的项目错误映射稳定；非法输入由 MCP SDK 返回 `Invalid params`（`-32602`）。
 - [ ] `tvcmall_auth_status` 只返回 configured。
-- [ ] 日志、异常、tool 输出、fixtures 和测试快照不含真实 PAT、完整响应或非必要 PII。
+- [ ] 日志、异常、tool 输出、fixtures 和测试快照不含真实 PAT、原始未脱敏响应或非必要 PII。
 - [ ] tools 只覆盖商品、订单、物流、运费、积分和余额流水只读查询，不暴露写操作或文件型能力。

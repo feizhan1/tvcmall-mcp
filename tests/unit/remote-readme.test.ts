@@ -174,4 +174,14 @@ describe('remote Streamable HTTP documentation', () => {
     expect(readme).toContain('npm run dev:local');
     expect(readme).not.toContain('TVCMALL_API_KEY=tmcp_v1_');
   });
+
+  it('documents detailed and redacted WebApi request diagnostics', () => {
+    expect(readme).toContain('mcp_webapi_request_completed');
+    expect(readme).toContain('webApiResponseBody');
+    expect(readme).toContain('16 KiB');
+    expect(readme).toContain('[REDACTED]');
+    expect(apiContract).toContain('webApiResponseBodyState');
+    expect(apiContract).toContain('webApiRequestHeaders');
+    expect(authorityDoc).toContain('webApiResponseBody');
+  });
 });

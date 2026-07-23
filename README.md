@@ -158,7 +158,7 @@ TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose
 
 `TVCMALL_WEBAPI_BASE_URL` 不提供隐式生产默认值，以免误连环境；例如现有 route 是 `/api/v3/...` 时，base URL 应以 `/api` 结尾，client 再追加 `/v3/...`。MCP Server 只为 PAT 增加一次 `Bearer ` 前缀，并复用接入说明中列出的现有 WebApi route；不会新增 MCP 专用业务 route、调用独立验证服务或交换 token。
 
-远程 Streamable HTTP 服务把诊断日志写到 stderr，每行一个 JSON 对象。未设置时 `info` 会记录服务启动、MCP HTTP 请求完成和已执行 tool 的结果；`debug` 额外记录 session 生命周期，`warn` / `error` 只保留对应严重级别，明确设置 `silent` 才完全不输出普通日志。日志字段只包括事件名、method/status、JSON-RPC method、预定义 tool 名、稳定错误码和耗时，绝不包含 `TVCMALL_API_KEY`、PAT、`Authorization`、请求参数、session ID、WebApi 原始响应或 PII。
+远程 Streamable HTTP 服务把诊断日志写到 stderr，每行一个 JSON 对象。未设置时 `info` 会记录服务启动、MCP HTTP 请求完成、已执行 tool 的结果，以及每一次下游 WebApi 请求的完成事件；`debug` 额外记录 session 生命周期，`warn` / `error` 只保留对应严重级别，明确设置 `silent` 才完全不输出普通日志。`mcp_webapi_request_completed` 默认记录脱敏后的 query、出站/响应 headers、request body、response body、HTTP status、耗时和失败阶段。PAT、`TVCMALL_API_KEY`、`Authorization`、Cookie、密码、电话、邮箱、完整地址和其他 PII 均替换为 `[REDACTED]`，不提供关闭脱敏的配置。
 
 当 tool 的下游 WebApi 调用失败时，`mcp_tool_completed` 还会安全地记录 `webApiMethod`、`normalizedRoute`、`webApiStatus` 和每次请求生成的 UUID `traceId`。如果 WebApi 在 `403` 响应中返回受控的 `X-TVCMall-MCP-Auth-Reason`，日志可额外包含 `authReason`（仅 `scope_missing`、`route_not_registered` 或 `route_disabled`）。例如：
 
@@ -166,9 +166,11 @@ TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose
 {"timestamp":"2026-07-23T08:39:35.918Z","level":"warn","event":"mcp_tool_completed","toolName":"tvcmall_get_points","outcome":"error","errorCode":"PERMISSION_DENIED","webApiMethod":"GET","normalizedRoute":"api/v3/user/points/stat","webApiStatus":403,"traceId":"7f4b64e0-6f3c-4f8c-a3ac-97e0c99f4941","authReason":"scope_missing","durationMs":1685}
 ```
 
-`traceId` 不由 PAT、session 或请求参数派生。值为空、缺失或不在白名单内的拒绝原因不会写入日志，也不会改变授权结果。排查 `PERMISSION_DENIED` 时，先从 MCP 日志取得 `traceId`，再在 WebApi/ApplicationServices 的安全审计日志中查询对应的 method、normalized route 和授权决策；不要通过打开 WebApi 原始响应日志排查。
+`traceId` 不由 PAT、session 或请求参数派生。值为空、缺失或不在白名单内的拒绝原因不会写入日志，也不会改变授权结果。排查 `PERMISSION_DENIED` 时，先查看同一 `traceId` 的 `mcp_webapi_request_completed.webApiResponseBody` 中已脱敏的下游错误信息；仍可在 WebApi/ApplicationServices 的安全审计日志中查询对应的 method、normalized route 和授权决策。
 
-每次 MCP 到 WebApi 的业务请求还会输出独立的 `mcp_webapi_request_completed` 事件，包括成功请求。事件可记录 `traceId`、`webApiMethod`、`normalizedRoute`、`webApiStatus`、`webApiDurationMs`、稳定 `errorCode` 和失败阶段 `webApiFailurePhase`。对于 `403`，`authReasonState` 为 `accepted`、`missing` 或 `unrecognized`：后两者分别表示下游没有返回原因 header、或返回值不符合白名单；未知值原文不会记录。该事件绝不记录 host、query、请求/响应 body、header 原文、PAT、`Authorization`、session 或 PII。
+每次 MCP 到 WebApi 的业务请求只输出一条独立的 `mcp_webapi_request_completed` 事件，包括成功请求。事件包含 `traceId`、`webApiMethod`、`normalizedRoute`、`webApiStatus`、`webApiDurationMs`、稳定 `errorCode`、失败阶段 `webApiFailurePhase`，以及 `webApiRequestQuery`、`webApiRequestHeaders`、`webApiRequestBody`、`webApiResponseHeaders`、`webApiResponseBody`。`webApiRequestBodyBytes`、`webApiResponseBodyBytes`、`webApiRequestBodyTruncated`、`webApiResponseBodyTruncated` 和 `webApiResponseBodyState` 用于判断 payload 是否完整；每个 body 日志快照最多 16 KiB UTF-8，超过上限会在脱敏后截断。对于 `403`，`authReasonState` 为 `accepted`、`missing` 或 `unrecognized`：后两者分别表示下游没有返回原因 header、或返回值不符合白名单；未知 header 原文不会记录。完整 URL 的 host、userinfo 和 fragment 不记录，所有 headers、query 与 body 都只记录强制脱敏后的值。
+
+`mcp_tool_completed` 继续只提供 tool 的摘要、错误码和定位字段，不复制 query、headers 或 request/response body。排障时应通过其 `traceId` 查询同一请求的 `mcp_webapi_request_completed`。
 
 `HTTPS` 在所有合法环境均可使用。`production`、`staging`、未设置环境或非法环境均强制 `HTTPS`。只有显式 `TVCMALL_API_ENV=sandbox` 时，才允许 `http://` 指向 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。此校验不做 DNS 解析；普通域名、公网、链路本地 `169.254.0.0/16`、CGNAT `100.64.0.0/10` 与其他 IPv6 地址都被拒绝。所有环境仍拒绝 URL userinfo、query 和 fragment。
 

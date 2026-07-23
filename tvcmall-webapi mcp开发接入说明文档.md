@@ -123,7 +123,7 @@ X-TVCMall-MCP-Auth-Reason: scope_missing | route_not_registered | route_disabled
 
 该 header 缺失时保持原有 `403` 行为；不得把 PAT、用户、scope 列表、数据库细节或原始异常放入 header。MCP 仅接受上表的精确值写入安全日志，未知值会被忽略。无论是否发送该 header，授权结果仍完全由 WebApi/ApplicationServices/RDS 决定。
 
-MCP 会为每一次业务 WebApi 调用输出一条安全完成日志。若该日志的 `authReasonState` 为 `missing`，表示 WebApi 未返回本节 header；若为 `unrecognized`，表示返回值不在本节枚举中。MCP 不记录未知 header 原文，因此 WebApi 仍应使用 trace ID 在自身安全审计日志中排查具体返回值。
+MCP 会为每一次业务 WebApi 调用输出一条安全完成日志。该日志包含脱敏后的 request query、headers、request body、response headers 和 `webApiResponseBody`，并以 `webApiResponseBodyState`、bytes 与 truncated 字段说明响应正文是否完整。若该日志的 `authReasonState` 为 `missing`，表示 WebApi 未返回本节 header；若为 `unrecognized`，表示返回值不在本节枚举中。MCP 不记录未知授权原因 header 原文，因此 WebApi 仍应使用 trace ID 在自身安全审计日志中排查具体返回值。
 
 ## 5. 授权链路
 
@@ -323,12 +323,12 @@ HTTP Method + normalized_route -> required_scope
 
 业务 API 的成功响应和失败响应都保持现有 WebApi 格式。MCP Server 如需返回 MCP tool 的统一结构，应在 MCP Server 内部转换，不要求 WebApi 改响应格式。
 
-若 `403` 来自 MCP PAT 请求，WebApi 可按第 4.4 节返回 `X-TVCMall-MCP-Auth-Reason`。WebApi/ApplicationServices 运营人员应使用 MCP 日志中的 trace ID 查询同一条授权决策；MCP 不读取失败 response body，也不自行推断 scope 或 allowlist 状态。
+若 `403` 来自 MCP PAT 请求，WebApi 可按第 4.4 节返回 `X-TVCMall-MCP-Auth-Reason`。MCP 将失败 response body 的强制脱敏快照写入 `mcp_webapi_request_completed.webApiResponseBody`，但不将它放入 tool 输出或用于自行推断 scope/allowlist 状态。WebApi/ApplicationServices 运营人员仍应使用 trace ID 查询同一条授权决策。
 
 ## 10. 安全要求
 
 - 每个用户的 PAT 由 MCP Client 提供，只能短暂保存在对应 MCP session 的进程内存中；MCP Server 不使用环境变量或部署 secret 配置共享 PAT。
-- 日志、异常、链路追踪中必须脱敏入站 `TVCMALL_API_KEY`、出站 `Authorization` 和 `tmcp_v1_` token；可记录随机 trace ID、HTTP method、normalized route、HTTP status 和枚举授权拒绝分类。
+- 日志、异常、链路追踪中必须脱敏入站 `TVCMALL_API_KEY`、出站 `Authorization`、Cookie、密码和客户 PII；可记录随机 trace ID、HTTP method、normalized route、HTTP status、枚举授权拒绝分类，以及强制脱敏后的请求/响应诊断快照。
 - `DELETE /mcp`、transport `onclose`、idle TTL、initialize 失败或 server close 后必须清理 session PAT 与指纹。
 - `TVCMALL_API_ENV=production` 或 `staging` 时，MCP Server 到 WebApi 必须使用 HTTPS；`HTTPS` 在所有环境均可使用。
 - 只有显式 `TVCMALL_API_ENV=sandbox` 的隔离本地联调，才允许 HTTP WebApi URL，且 hostname 必须为 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。不得通过普通 hostname、公网、link-local、CGNAT 或非 loopback IPv6 使用 HTTP；URL 一律不得带 userinfo、query 或 fragment。
