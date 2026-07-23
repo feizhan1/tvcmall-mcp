@@ -555,4 +555,6 @@ class RecordingLogger implements McpHttpLogger {
   toolCompleted(details: Parameters<McpHttpLogger['toolCompleted']>[0]): void {
     this.tools.push(details);
   }
+
+  webApiRequestCompleted(): void {}
 }

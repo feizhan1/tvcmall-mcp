@@ -550,6 +550,8 @@ class RecordingLogger implements McpHttpLogger {
   sessionEvent(): void {}
 
   toolCompleted(): void {}
+
+  webApiRequestCompleted(): void {}
 }
 
 function initialize(server: Server, pat: string): Promise<DispatchResult> {

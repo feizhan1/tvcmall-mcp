@@ -30,7 +30,7 @@ export interface ServerOptions {
 
 export function createTvcMallMcpServer(options: ServerOptions = {}): McpServer {
   const tokenStore = options.tokenStore ?? createDefaultTokenStore();
-  const defaultClients = createTvcMallClients();
+  const defaultClients = createTvcMallClients(undefined, options.logger);
   const authClient = options.authClient ?? defaultClients.authClient;
   const balanceClient = options.balanceClient ?? defaultClients.balanceClient;
   const productClient = options.productClient ?? defaultClients.productClient;

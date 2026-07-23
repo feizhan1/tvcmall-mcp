@@ -1,6 +1,6 @@
 import type { TvcMallLogLevel } from '../config/runtime-config.js';
 import type { McpErrorCode } from '../errors/mcp-errors.js';
-import type { WebApiFailureMetadata } from '../api/http-client.js';
+import type { WebApiFailureMetadata, WebApiRequestCompletedEvent } from '../api/http-client.js';
 
 export interface LogOutput {
   write(chunk: string): unknown;
@@ -44,6 +44,7 @@ export interface McpHttpLogger {
     requestType: 'healthz' | 'mcp';
   }): void;
   sessionEvent(event: 'mcp_session_created' | 'mcp_session_closed' | 'mcp_session_idle_expired'): void;
+  webApiRequestCompleted(event: WebApiRequestCompletedEvent): void;
   toolCompleted(details: {
     authReason?: ToolWebApiDiagnostics['authReason'];
     durationMs: number;
@@ -61,7 +62,8 @@ export const NOOP_MCP_HTTP_LOGGER: McpHttpLogger = {
   serverStarted() {},
   requestCompleted() {},
   sessionEvent() {},
-  toolCompleted() {}
+  toolCompleted() {},
+  webApiRequestCompleted() {}
 };
 
 const LEVEL_PRIORITY: Record<TvcMallLogLevel, number> = {
@@ -94,6 +96,25 @@ export function createMcpHttpLogger(options: {
     },
     sessionEvent(event) {
       write('debug', event, {});
+    },
+    webApiRequestCompleted(event) {
+      const level = event.outcome === 'success'
+        ? 'info'
+        : event.webApiFailurePhase === 'http_response' && event.webApiStatus !== undefined && event.webApiStatus < 500
+          ? 'warn'
+          : 'error';
+      write(level, 'mcp_webapi_request_completed', {
+        authReason: event.authReason,
+        authReasonState: event.authReasonState,
+        errorCode: event.errorCode,
+        normalizedRoute: event.normalizedRoute,
+        outcome: event.outcome,
+        traceId: event.traceId,
+        webApiDurationMs: event.webApiDurationMs,
+        webApiFailurePhase: event.webApiFailurePhase,
+        webApiMethod: event.webApiMethod,
+        webApiStatus: event.webApiStatus
+      });
     },
     toolCompleted({ authReason, durationMs, errorCode, normalizedRoute, outcome, traceId, toolName, webApiMethod, webApiStatus }) {
       write(outcome === 'error' ? 'warn' : 'info', 'mcp_tool_completed', {

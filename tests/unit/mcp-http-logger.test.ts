@@ -73,4 +73,38 @@ describe('MCP HTTP logger', () => {
     expect(record).not.toHaveProperty('headers');
     expect(record).not.toHaveProperty('metadata');
   });
+
+  it('writes a safe completion record for every failed WebApi request', () => {
+    const output = new StringOutput();
+    const logger = createMcpHttpLogger({ level: 'info', output });
+
+    logger.webApiRequestCompleted({
+      outcome: 'error',
+      errorCode: 'PERMISSION_DENIED',
+      webApiFailurePhase: 'http_response',
+      authReasonState: 'missing',
+      normalizedRoute: 'api/v3/user/points/stat',
+      traceId: '00000000-0000-4000-8000-000000000000',
+      webApiDurationMs: 42,
+      webApiMethod: 'GET',
+      webApiStatus: 403
+    });
+
+    const record = JSON.parse(output.value) as Record<string, unknown>;
+    expect(record).toMatchObject({
+      event: 'mcp_webapi_request_completed',
+      level: 'warn',
+      outcome: 'error',
+      errorCode: 'PERMISSION_DENIED',
+      webApiFailurePhase: 'http_response',
+      authReasonState: 'missing',
+      normalizedRoute: 'api/v3/user/points/stat',
+      traceId: '00000000-0000-4000-8000-000000000000',
+      webApiDurationMs: 42,
+      webApiMethod: 'GET',
+      webApiStatus: 403
+    });
+    expect(JSON.stringify(record)).not.toContain('Authorization');
+    expect(record).not.toHaveProperty('headers');
+  });
 });

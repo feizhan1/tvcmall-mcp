@@ -21,6 +21,7 @@ import { HttpShippingClient } from '../shipping/http-shipping-client.js';
 import type { TrackingClient } from '../tracking/tracking-client.js';
 import { FakeTrackingClient } from '../tracking/fake-tracking-client.js';
 import { HttpTrackingClient } from '../tracking/http-tracking-client.js';
+import type { McpHttpLogger } from '../logging/mcp-http-logger.js';
 
 export interface TvcMallClients {
   authClient: AuthClient;
@@ -32,16 +33,21 @@ export interface TvcMallClients {
   trackingClient: TrackingClient;
 }
 
-export function createTvcMallClients(config: TvcMallRuntimeConfig = loadRuntimeConfig()): TvcMallClients {
+export function createTvcMallClients(config: TvcMallRuntimeConfig = loadRuntimeConfig(), logger?: McpHttpLogger): TvcMallClients {
   if (config.dataSource === 'real') {
+    const requestOptions = {
+      baseUrl: config.webApiBaseUrl,
+      onWebApiRequestCompleted: logger ? logger.webApiRequestCompleted.bind(logger) : undefined,
+      timeoutMs: config.apiTimeoutMs
+    };
     return {
       authClient: new HttpAuthClient({ baseUrl: config.webApiBaseUrl, authorization: config.apiAuthorization }),
-      balanceClient: new HttpBalanceClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
-      productClient: new HttpProductClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
-      pointsClient: new HttpPointsClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
-      shippingClient: new HttpShippingClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
-      orderClient: new HttpOrderClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs }),
-      trackingClient: new HttpTrackingClient({ baseUrl: config.webApiBaseUrl, timeoutMs: config.apiTimeoutMs })
+      balanceClient: new HttpBalanceClient(requestOptions),
+      productClient: new HttpProductClient(requestOptions),
+      pointsClient: new HttpPointsClient(requestOptions),
+      shippingClient: new HttpShippingClient(requestOptions),
+      orderClient: new HttpOrderClient(requestOptions),
+      trackingClient: new HttpTrackingClient(requestOptions)
     };
   }
 
