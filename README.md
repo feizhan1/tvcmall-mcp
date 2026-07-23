@@ -160,6 +160,14 @@ TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose
 
 远程 Streamable HTTP 服务把诊断日志写到 stderr，每行一个 JSON 对象。未设置时 `info` 会记录服务启动、MCP HTTP 请求完成和已执行 tool 的结果；`debug` 额外记录 session 生命周期，`warn` / `error` 只保留对应严重级别，明确设置 `silent` 才完全不输出普通日志。日志字段只包括事件名、method/status、JSON-RPC method、预定义 tool 名、稳定错误码和耗时，绝不包含 `TVCMALL_API_KEY`、PAT、`Authorization`、请求参数、session ID、WebApi 原始响应或 PII。
 
+当 tool 的下游 WebApi 调用失败时，`mcp_tool_completed` 还会安全地记录 `webApiMethod`、`normalizedRoute`、`webApiStatus` 和每次请求生成的 UUID `traceId`。如果 WebApi 在 `403` 响应中返回受控的 `X-TVCMall-MCP-Auth-Reason`，日志可额外包含 `authReason`（仅 `scope_missing`、`route_not_registered` 或 `route_disabled`）。例如：
+
+```json
+{"timestamp":"2026-07-23T08:39:35.918Z","level":"warn","event":"mcp_tool_completed","toolName":"tvcmall_get_points","outcome":"error","errorCode":"PERMISSION_DENIED","webApiMethod":"GET","normalizedRoute":"api/v3/user/points/stat","webApiStatus":403,"traceId":"7f4b64e0-6f3c-4f8c-a3ac-97e0c99f4941","authReason":"scope_missing","durationMs":1685}
+```
+
+`traceId` 不由 PAT、session 或请求参数派生。值为空、缺失或不在白名单内的拒绝原因不会写入日志，也不会改变授权结果。排查 `PERMISSION_DENIED` 时，先从 MCP 日志取得 `traceId`，再在 WebApi/ApplicationServices 的安全审计日志中查询对应的 method、normalized route 和授权决策；不要通过打开 WebApi 原始响应日志排查。
+
 `HTTPS` 在所有合法环境均可使用。`production`、`staging`、未设置环境或非法环境均强制 `HTTPS`。只有显式 `TVCMALL_API_ENV=sandbox` 时，才允许 `http://` 指向 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。此校验不做 DNS 解析；普通域名、公网、链路本地 `169.254.0.0/16`、CGNAT `100.64.0.0/10` 与其他 IPv6 地址都被拒绝。所有环境仍拒绝 URL userinfo、query 和 fragment。
 
 ### 本地 sandbox 联调
@@ -196,7 +204,7 @@ curl https://mcp.example.com/mcp \
 | 现象 | 含义与处理 |
 | --- | --- |
 | `401 AUTH_REQUIRED` | PAT 缺失、格式错误，或 WebApi 判定 PAT 无效、过期、已撤销；重新配置 PAT |
-| `403 PERMISSION_DENIED` | PAT 缺少 `catalog.read` / `order.read`，或目标 method + route 未在 allowlist 启用；联系 TVCMall 管理员 |
+| `403 PERMISSION_DENIED` | PAT 缺少 `catalog.read` / `order.read`，或目标 method + route 未在 allowlist 启用；使用同一条 tool 日志的 `traceId` 查询 WebApi/ApplicationServices 授权决策，并联系 TVCMall 管理员 |
 | `429 RATE_LIMITED` | WebApi 正在限流；当前只返回通用安全提示，请稍后重试 |
 | `API_UNAVAILABLE` | WebApi `5xx`、网络、超时或响应正文读取失败；不要改 PAT，稍后重试并检查服务状态 |
 | `404 SESSION_NOT_FOUND` | session 已删除、空闲过期或服务重启；重新执行 MCP initialize |

@@ -1,6 +1,6 @@
 # TVCMall WebApi MCP 开发接入说明文档
 
-更新时间：2026-07-22
+更新时间：2026-07-23
 
 ## 1. 适用范围
 
@@ -90,22 +90,38 @@ Content-Type: application/json
 
 GET 接口通常不需要 `Content-Type`；POST/PUT/PATCH 接口按现有 API body 格式设置。
 
-### 4.4 来源标识 Header
+### 4.4 来源标识与授权诊断 Header
 
 本期授权不依赖来源标识 Header，授权只看 PAT、scope 和 route-scope allowlist。
 
-如果 MCP Server 需要链路排查，可以额外带自定义追踪 Header，例如：
+MCP Server 每次调用 WebApi 都会附加以下 header：
 
 ```http
 X-TVCMall-MCP-Client: tvcmall-mcp-server
-X-TVCMall-MCP-Tool: catalog.search
+X-TVCMall-MCP-Trace-Id: {uuid}
 ```
 
 注意：
 
-- 这些 Header 只用于日志或排查，不作为授权依据。
+- 这两个 header 只用于日志或排查，不作为授权依据，也不改变 route-scope allowlist。
+- `X-TVCMall-MCP-Trace-Id` 是每个 WebApi 请求生成的 UUID，不得从 PAT、session ID、客户信息或请求参数派生。
+- WebApi/ApplicationServices 必须在安全审计日志中记录 trace ID、HTTP method、normalized route、HTTP status 和授权决策，且不得记录 PAT、`Authorization`、请求参数、完整 URL/query、响应正文或 PII。
 - 不要把历史 `request-source` Header 当成 MCP 授权条件。
 - 即使入口网关保留 `request-source: external`，MCP PAT 分支也会先于旧网站 token 分支执行。
+
+对于 MCP PAT 的 `403`，WebApi 可选返回一个仅含枚举值的 response header：
+
+```http
+X-TVCMall-MCP-Auth-Reason: scope_missing | route_not_registered | route_disabled
+```
+
+| 值 | 授权拒绝分类 |
+| --- | --- |
+| `scope_missing` | PAT 缺少目标 route 所需 scope |
+| `route_not_registered` | method + normalized route 未登记到 allowlist |
+| `route_disabled` | route 已登记但 `enabled=0` |
+
+该 header 缺失时保持原有 `403` 行为；不得把 PAT、用户、scope 列表、数据库细节或原始异常放入 header。MCP 仅接受上表的精确值写入安全日志，未知值会被忽略。无论是否发送该 header，授权结果仍完全由 WebApi/ApplicationServices/RDS 决定。
 
 ## 5. 授权链路
 
@@ -119,7 +135,7 @@ sequenceDiagram
 
     Agent->>MCP: /mcp + TVCMALL_API_KEY: tmcp_v1_...
     MCP->>MCP: 格式校验并绑定 Mcp-Session-Id
-    MCP->>WebApi: 请求现有 API，Authorization: Bearer tmcp_v1_...
+    MCP->>WebApi: 请求现有 API，Authorization + Client + Trace-Id
     WebApi->>WebApi: 识别 MCP PAT
     WebApi->>App: McpPat/Validate(rawToken, method, url)
     App->>RDS: 查询 PAT、scope、route-scope allowlist
@@ -194,13 +210,15 @@ Accept: application/json
 
 ```ts
 async function callTvcmallWebApi(pat: string, path: string, init: RequestInit = {}) {
+  const traceId = crypto.randomUUID();
   const response = await fetch(`${process.env.TVCMALL_WEBAPI_BASE_URL}${path}`, {
     ...init,
     headers: {
       Accept: 'application/json',
       ...(init.headers || {}),
       Authorization: `Bearer ${pat}`,
-      'X-TVCMall-MCP-Client': 'tvcmall-mcp-server'
+      'X-TVCMall-MCP-Client': 'tvcmall-mcp-server',
+      'X-TVCMall-MCP-Trace-Id': traceId
     }
   });
 
@@ -303,10 +321,12 @@ HTTP Method + normalized_route -> required_scope
 
 业务 API 的成功响应和失败响应都保持现有 WebApi 格式。MCP Server 如需返回 MCP tool 的统一结构，应在 MCP Server 内部转换，不要求 WebApi 改响应格式。
 
+若 `403` 来自 MCP PAT 请求，WebApi 可按第 4.4 节返回 `X-TVCMall-MCP-Auth-Reason`。WebApi/ApplicationServices 运营人员应使用 MCP 日志中的 trace ID 查询同一条授权决策；MCP 不读取失败 response body，也不自行推断 scope 或 allowlist 状态。
+
 ## 10. 安全要求
 
 - 每个用户的 PAT 由 MCP Client 提供，只能短暂保存在对应 MCP session 的进程内存中；MCP Server 不使用环境变量或部署 secret 配置共享 PAT。
-- 日志、异常、链路追踪中必须脱敏入站 `TVCMALL_API_KEY`、出站 `Authorization` 和 `tmcp_v1_` token。
+- 日志、异常、链路追踪中必须脱敏入站 `TVCMALL_API_KEY`、出站 `Authorization` 和 `tmcp_v1_` token；可记录随机 trace ID、HTTP method、normalized route、HTTP status 和枚举授权拒绝分类。
 - `DELETE /mcp`、transport `onclose`、idle TTL、initialize 失败或 server close 后必须清理 session PAT 与指纹。
 - `TVCMALL_API_ENV=production` 或 `staging` 时，MCP Server 到 WebApi 必须使用 HTTPS；`HTTPS` 在所有环境均可使用。
 - 只有显式 `TVCMALL_API_ENV=sandbox` 的隔离本地联调，才允许 HTTP WebApi URL，且 hostname 必须为 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。不得通过普通 hostname、公网、link-local、CGNAT 或非 loopback IPv6 使用 HTTP；URL 一律不得带 userinfo、query 或 fragment。
@@ -332,4 +352,5 @@ HTTP Method + normalized_route -> required_scope
 - MCP Server 未直接调用 ApplicationServices 或 RDS。
 - WebApi 返回 `401`、`403` 时 MCP Server 有清晰错误提示。
 - MCP Server 日志已对 PAT 做脱敏。
+- WebApi/ApplicationServices 安全审计日志已用 `X-TVCMall-MCP-Trace-Id` 关联授权决策；可选 `X-TVCMall-MCP-Auth-Reason` 只返回第 4.4 节枚举值。
 - MCP Server 对 WebApi 返回值只做 MCP tool 层转换，不要求 WebApi 改响应格式。
