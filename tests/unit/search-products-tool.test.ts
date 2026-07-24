@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPatAuthContext } from '../../src/auth/request-auth-context.js';
-import { SearchProductsOutputSchema, searchProductsForMcp } from '../../src/tools/products.js';
+import { GetProductDetailInputSchema, SearchProductsOutputSchema, searchProductsForMcp } from '../../src/tools/products.js';
 import { FakeProductClient } from '../../src/products/fake-product-client.js';
+import type { ProductClient } from '../../src/products/product-client.js';
 
 const pat = 'tmcp_v1_token-id.secret-value';
 const authContext = createPatAuthContext(pat);
@@ -46,6 +47,47 @@ describe('searchProductsForMcp', () => {
       expect(item.sku.trim()).not.toBe('');
       expect(item.product_id).toMatch(/^\/details\//);
     }
+  });
+
+  it('treats a page with one product as a unique match even when total is greater than one', async () => {
+    const productClient: ProductClient = {
+      async searchProducts() {
+        return {
+          query: 'USB-C cable',
+          page: 1,
+          page_size: 20,
+          total: 2,
+          items: [{
+            id: 'prd_usb_c_cable',
+            product_id: '/details/usb-c-cable.html',
+            sku: 'TVC-USBC-CABLE',
+            title: 'USB-C Cable',
+            price: 2.5,
+            currency: 'USD',
+            stock_status: 'in_stock',
+            category: 'Cables',
+            summary: 'USB-C charging cable'
+          }]
+        };
+      },
+      async getProductDetail() {
+        return null;
+      }
+    };
+
+    const result = await searchProductsForMcp({ query: 'USB-C cable', page: 1, page_size: 20 }, { authContext, productClient });
+    const structuredContent = result.structuredContent as { items: Array<{ product_id: string }> };
+    const summary = result.content.find((item) => item.type === 'text');
+    const productId = structuredContent.items[0]?.product_id;
+
+    if (!summary || summary.type !== 'text') {
+      throw new Error('缺少文本摘要');
+    }
+
+    expect(summary.text).toContain('唯一');
+    expect(summary.text).toContain(productId);
+    expect(summary.text).toContain('详情');
+    expect(GetProductDetailInputSchema.parse({ product_id: productId })).toEqual({ product_id: '/details/usb-c-cable.html' });
   });
 
   it('calls the product client without a local scope list', async () => {
