@@ -52,8 +52,8 @@ describe('createTvcMallMcpServer', () => {
 
     const expectedDescriptions = {
       tvcmall_auth_status: '用于检查当前 MCP 会话是否已配置 TVCMALL_API_KEY；仅返回配置状态，不验证凭证有效性，也不调用 WebApi。',
-      tvcmall_search_products: '用于按关键词分页搜索商品；已知 product_id 并需要 SKU、价格、库存或属性详情时，使用 tvcmall_get_product_detail。',
-      tvcmall_get_product_detail: '用于按 product_id 查询单个商品的 SKU、价格、库存和属性详情；需要按关键词查找商品时，使用 tvcmall_search_products。',
+      tvcmall_search_products: '用于按 SKU 或关键词分页搜索商品。每个结果的 product_id 取自 WebApi Url；仅当当前 items 只有一个商品且用户需要更多详情时，才使用该 product_id 调用 tvcmall_get_product_detail。若有多个商品，先让用户按标题或 SKU 确认，不能自行选择。',
+      tvcmall_get_product_detail: '用于按商品详情路径查询单个商品的 SKU、价格、库存和属性详情；product_id 必须是 tvcmall_search_products 返回项的 product_id（即 WebApi Url），不能传 SKU、关键词或内部商品 ID；未知商品时先使用 tvcmall_search_products。',
       tvcmall_get_points: '用于查询当前客户的积分汇总；需要逐笔积分获取和使用记录时，使用 tvcmall_list_point_records。',
       tvcmall_list_point_records: '用于按方向分页查询当前客户的积分流水。direction：全部或未指定为 all；获得、获取积分为 got；使用、消耗积分为 used。需要积分汇总时，使用 tvcmall_get_points。',
       tvcmall_list_balance_records: '用于按 all、income 或 expense 分页查询当前客户的余额流水；积分查询请使用 tvcmall_get_points 或 tvcmall_list_point_records。',

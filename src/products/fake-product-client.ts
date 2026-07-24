@@ -37,6 +37,6 @@ export class FakeProductClient implements ProductClient {
   }
 
   async getProductDetail(productId: string, _session: StoredAuthSession): Promise<ProductDetail | null> {
-    return FIXTURE_PRODUCT_DETAILS.find((product) => product.id === productId || product.sku === productId) ?? null;
+    return FIXTURE_PRODUCT_DETAILS.find((product) => product.product_id === productId) ?? null;
   }
 }

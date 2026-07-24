@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { WebApiRequestError } from '../../src/api/http-client.js';
 import { HttpProductClient } from '../../src/products/http-product-client.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
+import { ProductDetailSchema } from '../../src/tools/products.js';
 
 const session: StoredAuthSession = {
   customer: { id: 'cus_100', email: 'buyer@example.com' },
@@ -30,11 +31,12 @@ describe('HttpProductClient', () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         total: 1,
-        list: [
+        Products: [
           {
             productId: 'prd_1',
             sku: 'SKU-1',
             productName: 'iPhone Case',
+            Url: '/details/iphone-case.html',
             price: '3.50',
             stock: 12,
             categoryName: 'Phone Cases',
@@ -67,6 +69,7 @@ describe('HttpProductClient', () => {
         {
           id: 'prd_1',
           sku: 'SKU-1',
+          product_id: '/details/iphone-case.html',
           title: 'iPhone Case',
           price: 3.5,
           currency: 'USD',
@@ -76,6 +79,74 @@ describe('HttpProductClient', () => {
         }
       ]
     });
+  });
+
+  it('uses data.Products instead of a distracting list field', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      data: {
+        Count: 2,
+        Products: [
+          {
+            Sku: 'SKU-FROM-PRODUCTS',
+            Title: 'Product from authoritative list',
+            Url: '/details/from-products.html',
+            DiscountedPrice: 2.16,
+            CatalogName: 'Phone Cases'
+          },
+          {
+            Sku: 'SECOND-SKU-FROM-PRODUCTS',
+            Title: 'Second product from authoritative list',
+            Url: '/details/second-from-products.html',
+            DiscountedPrice: 3.14,
+            CatalogName: 'Phone Cases'
+          }
+        ],
+        list: [
+          {
+            sku: 'SKU-FROM-LIST',
+            productName: 'Product from distracting list',
+            Url: '/details/from-list.html',
+            price: 9.99,
+            categoryName: 'Distractor'
+          }
+        ]
+      }
+    }));
+    const client = new HttpProductClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const result = await client.searchProducts({ query: 'iphone case', page: 1, page_size: 20 }, session);
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items.map((item) => ({
+      sku: item.sku,
+      product_id: (item as unknown as { product_id: string }).product_id
+    }))).toEqual(expect.arrayContaining([
+      { sku: 'SKU-FROM-PRODUCTS', product_id: '/details/from-products.html' },
+      { sku: 'SECOND-SKU-FROM-PRODUCTS', product_id: '/details/second-from-products.html' }
+    ]));
+  });
+
+  it('does not fall back to list when the authoritative Products list is empty', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      data: {
+        Count: 0,
+        Products: [],
+        list: [
+          {
+            sku: 'SKU-FROM-DISTRACTING-LIST',
+            productName: 'Product from distracting list',
+            Url: '/details/from-distracting-list.html',
+            price: 9.99,
+            categoryName: 'Distractor'
+          }
+        ]
+      }
+    }));
+    const client = new HttpProductClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+
+    const result = await client.searchProducts({ query: 'iphone case', page: 1, page_size: 20 }, session);
+
+    expect(result.items).toEqual([]);
   });
 
   it('gets product detail through the existing WebApi route using the same session PAT', async () => {
@@ -106,6 +177,8 @@ describe('HttpProductClient', () => {
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/v3/productdetail/detail');
     expect(JSON.parse(parsedUrl.searchParams.get('body') ?? '{}')).toEqual({ url: '/details/camera-bag.html' });
     expect(init.headers).toMatchObject({ Authorization: 'Bearer tmcp_v1_token-id.secret-value' });
+    expect(detail?.product_id).toBe('/details/camera-bag.html');
+    expect(ProductDetailSchema.parse(detail)).toMatchObject({ product_id: '/details/camera-bag.html' });
     expect(detail).toMatchObject({
       id: 'prd_1',
       sku: 'SKU-1',
@@ -163,6 +236,7 @@ describe('HttpProductClient', () => {
     expect(result.items[0]).toMatchObject({
       id: '661100446A',
       sku: '661100446A',
+      product_id: '/details/dux-ducis-for-iphone-17-pro-case-magnetic-frosted-shockproof-2-in-1-pc-tpu-magsafe-cover-red-sku661100446a.html',
       title: 'DUX DUCIS for iPhone 17 Pro Case Magnetic Frosted Shockproof 2 in 1 PC TPU MagSafe Cover - Red',
       price: 2.16,
       currency: 'USD',

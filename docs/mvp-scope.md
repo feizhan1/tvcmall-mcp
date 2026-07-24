@@ -55,8 +55,8 @@ Existing TVCMall WebApi routes + Authorization: Bearer 同一 PAT
 | Tool | 能力 | 限制 |
 | --- | --- | --- |
 | `tvcmall_auth_status` | 报告当前 session 是否配置 PAT | 只返回 `{ configured: boolean }`，不验证 PAT |
-| `tvcmall_search_products` | 搜索商品 | 分页，单页最多 50 条 |
-| `tvcmall_get_product_detail` | 查看商品详情 | 返回摘要和结构化详情 |
+| `tvcmall_search_products` | 按 SKU 或关键词搜索商品 | 分页，单页最多 50 条；`product_id` 来自 `data.Products[].Url`，仅当前 `items` 一项可查询详情，多项先按标题或 SKU 确认 |
+| `tvcmall_get_product_detail` | 使用搜索结果的 `product_id` 查看商品详情 | `product_id` 仅接受 `/details/...` 相对详情路径，且必须取自 `tvcmall_search_products` 返回项（即 `data.Products[].Url`，如 `/details/example-product-sku123.html`）；拒绝 SKU、关键词、内部商品 ID；返回摘要和结构化详情 |
 | `tvcmall_estimate_shipping` | 估算未下单商品运费 | SKU、数量最多 1000、两位国家/地区代码 |
 | `tvcmall_list_orders` | 查询订单列表 | 日期/状态筛选，单页最多 50 条 |
 | `tvcmall_get_order_detail` | 查看订单详情 | 地址等 PII 服从后端脱敏 |

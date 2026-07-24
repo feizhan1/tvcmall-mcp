@@ -25,8 +25,13 @@ export class HttpProductClient extends BaseHttpClient implements ProductClient {
       headers: this.authHeaders(session)
     });
     const payload = unwrapPayload(await this.readJson(response, 'TVCMall product search'));
-    const listSource = firstObject(payload, ['model']) ?? payload;
-    const items = firstArray(listSource, ['items', 'list', 'products', 'records']).map(mapProductSummary);
+    const hasAuthoritativeProducts = Object.hasOwn(payload, 'Products');
+    const listSource = hasAuthoritativeProducts ? payload : firstObject(payload, ['model']) ?? payload;
+    const items = (
+      hasAuthoritativeProducts
+        ? firstArray(payload, ['Products'])
+        : firstArray(listSource, ['items', 'list', 'products', 'records'])
+    ).map(mapProductSummary);
 
     return {
       query: input.query,
@@ -46,7 +51,7 @@ export class HttpProductClient extends BaseHttpClient implements ProductClient {
     const product = firstObject(payload, ['product', 'detail', 'item', 'model']) ?? payload;
 
     if (Object.keys(product).length === 0) return null;
-    return mapProductDetail(product);
+    return mapProductDetail(product, productId);
   }
 }
 
@@ -57,6 +62,7 @@ function mapProductSummary(source: JsonObject): ProductSummary {
 
   return {
     id,
+    product_id: readString(source, ['Url']),
     sku,
     title,
     price: readNumber(source, ['discountedPrice', 'salePrice', 'finalPrice', 'unitPrice', 'price']),
@@ -67,11 +73,12 @@ function mapProductSummary(source: JsonObject): ProductSummary {
   };
 }
 
-function mapProductDetail(source: JsonObject): ProductDetail {
+function mapProductDetail(source: JsonObject, fallbackProductId: string): ProductDetail {
   const summary = mapProductSummary(source);
   const physicalSource = firstObject(source, ['properties']) ?? source;
   return {
     ...summary,
+    product_id: summary.product_id || fallbackProductId,
     moq: Math.max(1, readInteger(source, ['moq', 'minOrderQuantity', 'minimumOrderQuantity'], 1)),
     weight_kg: readNumber(physicalSource, ['weight_kg', 'weightKg', 'weight']),
     dimensions_cm: {

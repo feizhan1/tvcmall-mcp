@@ -67,13 +67,13 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_search_products',
-    { title: 'TVCMall Search Products', description: '用于按关键词分页搜索商品；已知 product_id 并需要 SKU、价格、库存或属性详情时，使用 tvcmall_get_product_detail。', inputSchema: SearchProductsInputSchema, outputSchema: SearchProductsOutputSchema },
+    { title: 'TVCMall Search Products', description: '用于按 SKU 或关键词分页搜索商品。每个结果的 product_id 取自 WebApi Url；仅当当前 items 只有一个商品且用户需要更多详情时，才使用该 product_id 调用 tvcmall_get_product_detail。若有多个商品，先让用户按标题或 SKU 确认，不能自行选择。', inputSchema: SearchProductsInputSchema, outputSchema: SearchProductsOutputSchema },
     async (input) => handleToolCall('tvcmall_search_products', logger, () => searchProductsForMcp(input, { authContext, productClient }))
   );
 
   server.registerTool(
     'tvcmall_get_product_detail',
-    { title: 'TVCMall Get Product Detail', description: '用于按 product_id 查询单个商品的 SKU、价格、库存和属性详情；需要按关键词查找商品时，使用 tvcmall_search_products。', inputSchema: GetProductDetailInputSchema, outputSchema: ProductDetailSchema },
+    { title: 'TVCMall Get Product Detail', description: '用于按商品详情路径查询单个商品的 SKU、价格、库存和属性详情；product_id 必须是 tvcmall_search_products 返回项的 product_id（即 WebApi Url），不能传 SKU、关键词或内部商品 ID；未知商品时先使用 tvcmall_search_products。', inputSchema: GetProductDetailInputSchema, outputSchema: ProductDetailSchema },
     async (input) => handleToolCall('tvcmall_get_product_detail', logger, () => getProductDetailForMcp(input, { authContext, productClient }))
   );
 

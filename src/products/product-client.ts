@@ -8,6 +8,7 @@ export interface ProductSearchInput {
 
 export interface ProductSummary {
   id: string;
+  product_id: string;
   sku: string;
   title: string;
   price: number;

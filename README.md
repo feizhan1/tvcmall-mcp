@@ -41,7 +41,7 @@ tmcp_v1_{tokenId}.{secret}
 
 ```text
 帮我查找 TVCMall 上适合 iPhone 的手机壳
-查看商品 123456 的详情
+先按 SKU 或关键词搜索商品，再使用搜索结果的 `/details/example-product-sku123.html` product_id 查询详情
 估算 SKU 100100 发往美国、数量 20 的运费
 查询我最近 10 个订单
 查询订单 V24011000008 的物流和运费
@@ -55,8 +55,8 @@ tmcp_v1_{tokenId}.{secret}
 | Tool | 用途 | WebApi scope |
 | --- | --- | --- |
 | `tvcmall_auth_status` | 仅报告当前 session 是否已配置 PAT | 不调用 WebApi |
-| `tvcmall_search_products` | 分页搜索商品 | `catalog.read` |
-| `tvcmall_get_product_detail` | 查看商品详情 | `catalog.read` |
+| `tvcmall_search_products` | 按 SKU 或关键词分页搜索商品；`product_id` 来自 `data.Products[].Url`，仅当前 `items` 一项时可用其查询详情，多项先按标题或 SKU 确认 | `catalog.read` |
+| `tvcmall_get_product_detail` | `product_id` 仅接受 `/details/...` 相对详情路径，且必须取自 `tvcmall_search_products` 返回项的 `product_id`（即 `data.Products[].Url`，如 `/details/example-product-sku123.html`）；拒绝 SKU、关键词和内部商品 ID | `catalog.read` |
 | `tvcmall_estimate_shipping` | 按 SKU、数量和目的地估算未下单商品运费 | `catalog.read` |
 | `tvcmall_list_orders` | 分页查询订单 | `order.read` |
 | `tvcmall_get_order_detail` | 查看订单详情 | `order.read` |

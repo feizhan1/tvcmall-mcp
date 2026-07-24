@@ -12,11 +12,15 @@ export const SearchProductsInputSchema = z.object({
 });
 
 export const GetProductDetailInputSchema = z.object({
-  product_id: z.string().trim().min(1)
+  product_id: z.string()
+    .trim()
+    .regex(/^\/details\/[^?#]+$/)
+    .describe('必须传入 tvcmall_search_products 返回项的 product_id，即 WebApi Url')
 });
 
 export const ProductSummarySchema = z.object({
   id: z.string(),
+  product_id: z.string().min(1),
   sku: z.string(),
   title: z.string(),
   price: z.number(),
@@ -143,8 +147,15 @@ function formatProductSearchSummary(result: z.infer<typeof SearchProductsOutputS
   }
 
   const lines = result.items.map((item, index) => {
-    return `${index + 1}. ${item.title} (${item.sku}) - ${item.currency} ${item.price.toFixed(2)} - ${item.stock_status}`;
+    return `${index + 1}. ${item.title} | sku: ${item.sku} | 价格: ${item.currency} ${item.price.toFixed(2)} | 库存: ${item.stock_status} | product_id: ${item.product_id}`;
   });
 
-  return [`找到 ${result.total} 个匹配商品，当前返回 ${result.items.length} 个：`, ...lines].join('\n');
+  if (result.items.length === 1) {
+    return [`找到唯一匹配商品，可使用该项 product_id 查询详情：`, ...lines].join('\n');
+  }
+
+  return [
+    `找到 ${result.total} 个匹配商品，当前返回 ${result.items.length} 个。匹配不唯一，请先按 title 或 SKU 确认具体商品，不可自行选择：`,
+    ...lines
+  ].join('\n');
 }

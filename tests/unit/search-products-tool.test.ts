@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPatAuthContext } from '../../src/auth/request-auth-context.js';
-import { searchProductsForMcp } from '../../src/tools/products.js';
+import { SearchProductsOutputSchema, searchProductsForMcp } from '../../src/tools/products.js';
 import { FakeProductClient } from '../../src/products/fake-product-client.js';
 
 const pat = 'tmcp_v1_token-id.secret-value';
@@ -15,11 +15,37 @@ describe('searchProductsForMcp', () => {
   });
 
   it('returns summarized product search results without token values', async () => {
-    const result = await searchProductsForMcp({ query: 'iphone case', page: 1, page_size: 2 }, { authContext, productClient: new FakeProductClient() });
+    const result = await searchProductsForMcp({ query: 'TVC-USBC-20W-PD', page: 1, page_size: 2 }, { authContext, productClient: new FakeProductClient() });
+    const structuredContent = result.structuredContent as { items: Array<{ product_id: string }> };
 
     expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toMatchObject({ query: 'iphone case', page: 1, page_size: 2, total: expect.any(Number), items: expect.any(Array) });
+    expect(result.structuredContent).toMatchObject({
+      query: 'TVC-USBC-20W-PD',
+      page: 1,
+      page_size: 2,
+      total: expect.any(Number),
+      items: expect.any(Array)
+    });
+    expect(structuredContent.items).toHaveLength(1);
+    const parsed = SearchProductsOutputSchema.parse(result.structuredContent);
+    expect(parsed.items[0]?.product_id).toMatch(/^\/details\//);
+    expect(structuredContent.items[0]?.product_id).toMatch(/^\/details\//);
     expect(JSON.stringify(result)).not.toContain(pat);
+  });
+
+  it('returns usable details paths for every product in a multi-result search', async () => {
+    const result = await searchProductsForMcp({ query: 'iphone case', page: 1, page_size: 2 }, { authContext, productClient: new FakeProductClient() });
+    const structuredContent = result.structuredContent as {
+      items: Array<{ title: string; sku: string; product_id: string }>;
+    };
+
+    expect(result.isError).toBeUndefined();
+    expect(structuredContent.items.length).toBeGreaterThanOrEqual(2);
+    for (const item of structuredContent.items) {
+      expect(item.title.trim()).not.toBe('');
+      expect(item.sku.trim()).not.toBe('');
+      expect(item.product_id).toMatch(/^\/details\//);
+    }
   });
 
   it('calls the product client without a local scope list', async () => {

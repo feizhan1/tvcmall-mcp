@@ -238,8 +238,8 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 | Tool | 输入摘要 | 输出摘要 | Scope / route |
 | --- | --- | --- | --- |
 | `tvcmall_auth_status` | `{}` | `{ configured: boolean }` | 不调用 WebApi |
-| `tvcmall_search_products` | `query`、`page=1`、`page_size=20`（最大 50） | 查询词、分页、总数、商品摘要列表 | `catalog.read`；商品搜索 route |
-| `tvcmall_get_product_detail` | `product_id` | SKU、标题、价格、库存、MOQ、尺寸、属性、图片 | `catalog.read`；商品详情 route |
+| `tvcmall_search_products` | `query`（SKU 或关键词）、`page=1`、`page_size=20`（最大 50） | 查询词、分页、总数、商品摘要列表；每项含用于查询详情的 `product_id` | `catalog.read`；商品搜索 route |
+| `tvcmall_get_product_detail` | `product_id`（仅接受 `/details/...` 相对详情路径；必须取自 `tvcmall_search_products` 返回项，即 `data.Products[].Url`） | SKU、标题、价格、库存、MOQ、尺寸、属性、图片 | `catalog.read`；商品详情 route |
 | `tvcmall_estimate_shipping` | `sku`、`quantity`（1..1000）、两位 `countrycode` | 目的地、计费重量、币种、运输方案摘要 | `catalog.read`；运费试算 route |
 | `tvcmall_list_orders` | 可选日期、`status=V3All`、`page=1`、`page_size=20`（最大 50） | 分页、总数、订单号/状态/金额摘要 | `order.read`；订单列表 route |
 | `tvcmall_get_order_detail` | `order_id` | 商品、金额和后端脱敏后的收货信息 | `order.read`；订单详情 route |
@@ -271,13 +271,17 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 }
 ```
 
+`query` 可以是 SKU 或关键词。搜索结果中 `items[].product_id` 取自 WebApi 响应的 `data.Products[].Url`。仅当当前 `items` 只有一项时，才可将该 `product_id` 用于 `tvcmall_get_product_detail`；有多项结果时，必须先让用户按标题或 SKU 确认，不能自行选择。
+
 商品详情：
 
 ```json
 {
-  "product_id": "123456"
+  "product_id": "/details/example-product-sku123.html"
 }
 ```
+
+`product_id` 参数格式仅接受 `/details/...` 相对详情路径。调用时必须取自 `tvcmall_search_products` 返回项的 `product_id`，即 WebApi 响应的 `data.Products[].Url`；不得传 SKU、关键词或内部商品 ID。未知商品时，先使用 `tvcmall_search_products`。
 
 结果包含面向 AI 的短文本摘要和 `structuredContent`。搜索无结果时返回空 items 与明确摘要；单个商品不存在可返回稳定的 `PRODUCT_NOT_FOUND`，不得回显 WebApi 原始正文。
 

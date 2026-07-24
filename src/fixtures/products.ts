@@ -3,6 +3,7 @@ import type { ProductDetail } from '../products/product-client.js';
 export const FIXTURE_PRODUCT_DETAILS: ProductDetail[] = [
   {
     id: 'prd_iphone_case_001',
+    product_id: '/details/clear-magsafe-case-for-iphone-15-pro-max.html',
     sku: 'TVC-IP15-CASE-CLEAR',
     title: 'Clear MagSafe Case for iPhone 15 Pro Max',
     price: 3.98,
@@ -22,6 +23,7 @@ export const FIXTURE_PRODUCT_DETAILS: ProductDetail[] = [
   },
   {
     id: 'prd_iphone_case_002',
+    product_id: '/details/rugged-armor-case-for-iphone-14-series.html',
     sku: 'TVC-IP14-CASE-RUGGED',
     title: 'Rugged Armor Case for iPhone 14 Series',
     price: 4.65,
@@ -41,6 +43,7 @@ export const FIXTURE_PRODUCT_DETAILS: ProductDetail[] = [
   },
   {
     id: 'prd_iphone_case_003',
+    product_id: '/details/pu-leather-wallet-case-for-iphone-13.html',
     sku: 'TVC-IP13-WALLET-BLK',
     title: 'PU Leather Wallet Case for iPhone 13',
     price: 2.89,
@@ -60,6 +63,7 @@ export const FIXTURE_PRODUCT_DETAILS: ProductDetail[] = [
   },
   {
     id: 'prd_usb_c_001',
+    product_id: '/details/20w-usb-c-pd-fast-charger.html',
     sku: 'TVC-USBC-20W-PD',
     title: '20W USB-C PD Fast Charger',
     price: 5.2,
@@ -79,6 +83,7 @@ export const FIXTURE_PRODUCT_DETAILS: ProductDetail[] = [
   },
   {
     id: 'prd_screen_001',
+    product_id: '/details/tempered-glass-screen-protector-for-iphone-15.html',
     sku: 'TVC-IP15-TG-2PK',
     title: 'Tempered Glass Screen Protector for iPhone 15',
     price: 1.25,
