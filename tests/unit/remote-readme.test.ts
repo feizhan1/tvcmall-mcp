@@ -34,6 +34,165 @@ const currentDocs = readDocs([
   'tvcmall-webapi mcp开发接入说明文档.md',
 ]);
 
+type WebApiHttpSecurityRequirement = {
+  relationship: string;
+  pattern: RegExp;
+};
+
+type WebApiHttpSecurityContract = {
+  name: string;
+  document: string;
+  requirements: readonly WebApiHttpSecurityRequirement[];
+};
+
+const requiresWebApiHttpSecurity = (
+  relationship: string,
+  pattern: RegExp,
+): WebApiHttpSecurityRequirement => ({ relationship, pattern });
+
+const webApiHttpSecurityContracts: readonly WebApiHttpSecurityContract[] = [
+  {
+    name: 'README',
+    document: readme,
+    requirements: [
+      requiresWebApiHttpSecurity(
+        '开关默认关闭',
+        /TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`/,
+      ),
+      requiresWebApiHttpSecurity(
+        '仅 trim 后精确 true 启用',
+        /TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP[\s\S]{0,100}value\?\.trim\(\) === 'true'/,
+      ),
+      requiresWebApiHttpSecurity(
+        '默认 HTTP 仅限 sandbox loopback 或 RFC1918',
+        /开关关闭时，只有显式 `TVCMALL_API_ENV=sandbox`[\s\S]{0,260}(?:localhost|loopback)[\s\S]{0,160}RFC1918/,
+      ),
+      requiresWebApiHttpSecurity(
+        '显式开关允许所有环境与任意 host/port',
+        /当开关严格设为 `true` 时，`production`、`staging`、`sandbox` 及其他环境[\s\S]{0,120}任意 host\/port[\s\S]{0,100}`http:\/\/`/,
+      ),
+      requiresWebApiHttpSecurity('HTTP 明文传输风险', /HTTP 会以明文传输 PAT、请求和响应/),
+      requiresWebApiHttpSecurity(
+        'URL 始终拒绝 userinfo、query 和 fragment',
+        /无论开关状态，URL 都继续拒绝 userinfo、query 和 fragment/,
+      ),
+      requiresWebApiHttpSecurity(
+        'MCP Client 到 /mcp 仍要求 HTTPS/TLS',
+        /MCP Client 到 `\/mcp` 的 HTTPS\/TLS 要求/,
+      ),
+      requiresWebApiHttpSecurity('PAT 仍仅在当前 session 内存', /PAT 仅存在当前 session 内存的规则/),
+      requiresWebApiHttpSecurity('日志仍强制脱敏', /日志、异常和 tool 输出的强制脱敏/),
+    ],
+  },
+  {
+    name: 'API contract',
+    document: apiContract,
+    requirements: [
+      requiresWebApiHttpSecurity(
+        '开关默认关闭',
+        /TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`/,
+      ),
+      requiresWebApiHttpSecurity(
+        '仅 trim 后精确 true 启用',
+        /TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP[\s\S]{0,100}value\?\.trim\(\) === 'true'/,
+      ),
+      requiresWebApiHttpSecurity(
+        '默认 HTTP 仅限 sandbox loopback 或 RFC1918',
+        /开关关闭时，只有显式 `sandbox` 可使用 `http:\/\/`[\s\S]{0,220}(?:localhost|loopback)[\s\S]{0,160}RFC1918/,
+      ),
+      requiresWebApiHttpSecurity(
+        '显式开关允许所有环境与任意 host/port',
+        /开关严格设为 `true` 后，`production`、`staging`、`sandbox` 及其他环境[\s\S]{0,120}任意 host\/port[\s\S]{0,100}`http:\/\/`/,
+      ),
+      requiresWebApiHttpSecurity('HTTP 明文传输风险', /HTTP 会以明文传输 PAT、请求和响应/),
+      requiresWebApiHttpSecurity(
+        'URL 始终拒绝 userinfo、query 和 fragment',
+        /无论开关和环境如何，base URL 都不得含 userinfo、query 或 fragment/,
+      ),
+      requiresWebApiHttpSecurity(
+        'MCP Client 到 /mcp 仍要求 HTTPS/TLS',
+        /MCP Client 到公网 `\/mcp` 的 HTTPS\/TLS 要求/,
+      ),
+      requiresWebApiHttpSecurity('PAT 仍仅在当前 session 内存', /PAT 仅存当前 session 内存的规则/),
+      requiresWebApiHttpSecurity('日志仍强制脱敏', /日志、异常和 tool 输出的强制脱敏/),
+    ],
+  },
+  {
+    name: 'architecture',
+    document: architecture,
+    requirements: [
+      requiresWebApiHttpSecurity(
+        '开关默认关闭',
+        /TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`/,
+      ),
+      requiresWebApiHttpSecurity(
+        '仅 trim 后精确 true 启用',
+        /TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP[\s\S]{0,100}value\?\.trim\(\) === 'true'/,
+      ),
+      requiresWebApiHttpSecurity(
+        '默认 HTTP 仅限 sandbox loopback 或 RFC1918',
+        /默认情况下，只有显式 `sandbox` 可使用 HTTP，hostname 仅限[\s\S]{0,220}(?:localhost|loopback)[\s\S]{0,160}RFC1918/,
+      ),
+      requiresWebApiHttpSecurity(
+        '显式开关允许所有环境与任意 host/port',
+        /显式将开关设为 `true` 后，`production`、`staging`、`sandbox` 及其他环境[\s\S]{0,120}任意 host\/port[\s\S]{0,100}HTTP WebApi URL/,
+      ),
+      requiresWebApiHttpSecurity('HTTP 明文传输风险', /PAT、请求和响应会经过明文链路/),
+      requiresWebApiHttpSecurity(
+        'URL 始终拒绝 userinfo、query 和 fragment',
+        /无论开关状态，所有 URL 仍拒绝 userinfo、query 和 fragment/,
+      ),
+      requiresWebApiHttpSecurity(
+        'MCP Client 到 /mcp 仍要求 HTTPS/TLS',
+        /MCP Client 到 `\/mcp` 的 HTTPS\/TLS/,
+      ),
+      requiresWebApiHttpSecurity('PAT 仍仅在 session 内存', /PAT 仅限 session 内存/),
+      requiresWebApiHttpSecurity('日志仍强制脱敏', /日志强制脱敏/),
+    ],
+  },
+  {
+    name: 'authority document',
+    document: authorityDoc,
+    requirements: [
+      requiresWebApiHttpSecurity(
+        '开关默认关闭',
+        /TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`/,
+      ),
+      requiresWebApiHttpSecurity(
+        '仅 trim 后精确 true 启用',
+        /TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP[\s\S]{0,100}value\?\.trim\(\) === 'true'/,
+      ),
+      requiresWebApiHttpSecurity(
+        '默认 HTTP 仅限 sandbox loopback 或 RFC1918',
+        /开关关闭时，只有显式 `TVCMALL_API_ENV=sandbox`[\s\S]{0,260}(?:localhost|loopback)[\s\S]{0,160}RFC1918/,
+      ),
+      requiresWebApiHttpSecurity(
+        '显式开关允许所有环境与任意 host/port',
+        /开关严格设为 `true` 后，`production`、`staging`、`sandbox` 及其他环境[\s\S]{0,120}任意 host\/port[\s\S]{0,100}HTTP WebApi URL/,
+      ),
+      requiresWebApiHttpSecurity('HTTP 明文传输风险', /PAT、请求和响应会经过明文链路/),
+      requiresWebApiHttpSecurity(
+        'URL 始终拒绝 userinfo、query 和 fragment',
+        /URL 一律不得带 userinfo、query 或 fragment/,
+      ),
+      requiresWebApiHttpSecurity(
+        'MCP Client 到 /mcp 仍要求 HTTPS/TLS',
+        /MCP Client 到 `\/mcp` 的 HTTPS\/TLS 要求/,
+      ),
+      requiresWebApiHttpSecurity('PAT 仍仅在 session 内存', /PAT 仅在 session 内存中的规则/),
+      requiresWebApiHttpSecurity('日志仍强制脱敏', /日志、异常和 tool 输出的强制脱敏/),
+    ],
+  },
+];
+
+const supersededUnconditionalHttpsRules = [
+  /`production`、`staging`、未设置环境或非法环境均强制 `HTTPS`/,
+  /`production`、`staging`(?: 及回退的 `production`)? 必须使用 HTTPS WebApi URL/,
+  /`TVCMALL_API_ENV=production` 或 `staging` 时，MCP Server 到 WebApi 必须使用 HTTPS/,
+  /`production`、`staging`(?:（以及缺失或非法值回退后的 `production`）)?强制 HTTPS/,
+  /-> production\/staging: HTTPS outbound allowlist only/,
+];
+
 describe('remote Streamable HTTP documentation', () => {
   it('documents the core Streamable HTTP PAT and WebApi boundary in each public document', () => {
     for (const document of [readme, apiContract, architecture]) {
@@ -156,23 +315,24 @@ describe('remote Streamable HTTP documentation', () => {
     }
   });
 
-  it('documents the default sandbox HTTP restriction and explicit WebApi HTTP override', () => {
-    for (const document of [readme, apiContract, architecture, authorityDoc]) {
-      for (const term of [
-        'TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP',
-        'TVCMALL_API_ENV',
-        'sandbox',
-        'RFC1918',
-        'production',
-        'staging',
-        'HTTPS',
-      ]) {
-        expect(document).toContain(term);
+  it('locks the complete WebApi HTTP security contract in every public document', () => {
+    expect(webApiHttpSecurityContracts).toHaveLength(4);
+
+    for (const contract of webApiHttpSecurityContracts) {
+      expect(contract.requirements).toHaveLength(9);
+      for (const requirement of contract.requirements) {
+        expect(
+          contract.document.match(requirement.pattern),
+          `${contract.name} 应说明：${requirement.relationship}`,
+        ).not.toBeNull();
+      }
+      for (const supersededRule of supersededUnconditionalHttpsRules) {
+        expect(contract.document).not.toMatch(supersededRule);
       }
     }
+  });
 
-    expect(apiContract).toContain('默认 `false`');
-    expect(apiContract).toContain("value?.trim() === 'true'");
+  it('keeps the staging HTTP override example copyable', () => {
     expect(readme).toContain('http://113.108.60.83:8084/api');
     expect(readme).toContain(`export TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP=true
 export TVCMALL_WEBAPI_BASE_URL=http://113.108.60.83:8084/api
