@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { HttpOrderClient } from '../../src/orders/http-order-client.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
+import { ListOrdersInputSchema } from '../../src/tools/orders.js';
 
 const session: StoredAuthSession = {
   customer: { id: 'cus_100', email: 'buyer@example.com' },
@@ -25,7 +26,14 @@ function sampleResponse(name: string): Response {
 }
 
 describe('HttpOrderClient', () => {
-  it('lists orders through the existing WebApi route using the session PAT once as Bearer', async () => {
+  it.each([
+    'V3All',
+    'V3Unpaid',
+    'V3AwaitingConfirmation',
+    'V3Preparing',
+    'V3Shipped',
+    'V3Done'
+  ] as const)('sends WebApi order filter %s unchanged', async (status) => {
     const fetchMock = vi.fn(async () => jsonResponse({
       data: {
         total: 1,
@@ -43,7 +51,8 @@ describe('HttpOrderClient', () => {
     }));
     const client = new HttpOrderClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
 
-    const result = await client.listOrders({ page: 1, page_size: 10, status: 'shipped' }, session);
+    const input = ListOrdersInputSchema.parse({ page: 1, page_size: 10, status });
+    const result = await client.listOrders(input, session);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -54,7 +63,7 @@ describe('HttpOrderClient', () => {
       keywords: '',
       pageindex: 1,
       pagesize: 10,
-      status: 'shipped',
+      status,
       withdetail: true
     });
     expect(result).toEqual({
@@ -72,6 +81,17 @@ describe('HttpOrderClient', () => {
         }
       ]
     });
+  });
+
+  it('defaults an omitted MCP status to V3All before calling WebApi', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: { total: 0, list: [] } }));
+    const client = new HttpOrderClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
+    const input = ListOrdersInputSchema.parse({ page: 1, page_size: 10 });
+
+    await client.listOrders(input, session);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({ status: 'V3All' });
   });
 
   it('gets order detail through the existing WebApi route using the same session PAT', async () => {
@@ -120,7 +140,7 @@ describe('HttpOrderClient', () => {
     const fetchMock = vi.fn(async () => sampleResponse('订单列表api.json'));
     const client = new HttpOrderClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
 
-    const result = await client.listOrders({ page: 1, page_size: 10 }, session);
+    const result = await client.listOrders({ page: 1, page_size: 10, status: 'V3All' }, session);
 
     expect(result.total).toBe(1545);
     expect(result.items).toHaveLength(10);

@@ -1,11 +1,12 @@
 import type { StoredAuthSession } from '../storage/token-store.js';
 
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+export type OrderListStatusFilter = 'V3All' | 'V3Unpaid' | 'V3AwaitingConfirmation' | 'V3Preparing' | 'V3Shipped' | 'V3Done';
 
 export interface ListOrdersInput {
   start_date?: string;
   end_date?: string;
-  status?: OrderStatus;
+  status: OrderListStatusFilter;
   page: number;
   page_size: number;
 }

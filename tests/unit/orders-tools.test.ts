@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPatAuthContext } from '../../src/auth/request-auth-context.js';
-import { getOrderDetailForMcp, listOrdersForMcp } from '../../src/tools/orders.js';
+import { getOrderDetailForMcp, ListOrdersInputSchema, listOrdersForMcp } from '../../src/tools/orders.js';
 import { FakeOrderClient } from '../../src/orders/fake-order-client.js';
 
 const pat = 'tmcp_v1_token-id.secret-value';
@@ -32,9 +32,19 @@ describe('order MCP tools', () => {
     expect(listOrders).toHaveBeenCalled();
   });
 
+  it('defaults the MCP order filter to V3All and rejects legacy filter values', async () => {
+    const orderClient = new FakeOrderClient();
+    const listOrders = vi.spyOn(orderClient, 'listOrders');
+
+    await listOrdersForMcp({ page: 1, page_size: 20 }, { authContext, orderClient });
+
+    expect(listOrders).toHaveBeenCalledWith(expect.objectContaining({ status: 'V3All' }), expect.anything());
+    expect(() => ListOrdersInputSchema.parse({ page: 1, page_size: 20, status: 'shipped' })).toThrow();
+  });
+
   it('returns summarized orders and order detail without PAT values', async () => {
     const orderClient = new FakeOrderClient();
-    const orders = await listOrdersForMcp({ page: 1, page_size: 2, status: 'shipped' }, { authContext, orderClient });
+    const orders = await listOrdersForMcp({ page: 1, page_size: 2, status: 'V3Shipped' }, { authContext, orderClient });
     const detail = await getOrderDetailForMcp({ order_id: 'V10001' }, { authContext, orderClient });
 
     expect(orders.structuredContent).toMatchObject({ page: 1, page_size: 2, total: expect.any(Number), items: expect.any(Array) });

@@ -15,7 +15,7 @@ export class HttpOrderClient extends BaseHttpClient implements OrderClient {
         keywords: '',
         pageindex: input.page,
         pagesize: input.page_size,
-        status: input.status ?? 'All',
+        status: input.status,
         withdetail: true
       })
     });

@@ -6,11 +6,21 @@ import { FakeOrderClient } from '../orders/fake-order-client.js';
 import type { OrderClient } from '../orders/order-client.js';
 
 export const OrderStatusSchema = z.enum(['pending', 'processing', 'shipped', 'delivered', 'cancelled']);
+const OrderListStatusFilterSchema = z.enum([
+  'V3All',
+  'V3Unpaid',
+  'V3AwaitingConfirmation',
+  'V3Preparing',
+  'V3Shipped',
+  'V3Done'
+]).default('V3All').describe(
+  '订单列表筛选：全部或未指定为 V3All；待付款为 V3Unpaid；待确认为 V3AwaitingConfirmation；备货中为 V3Preparing；已发货为 V3Shipped；已完成为 V3Done。'
+);
 
 export const ListOrdersInputSchema = z.object({
   start_date: z.string().optional(),
   end_date: z.string().optional(),
-  status: OrderStatusSchema.optional(),
+  status: OrderListStatusFilterSchema,
   page: z.number().int().min(1).default(1),
   page_size: z.number().int().min(1).max(50).default(20)
 });
@@ -57,7 +67,7 @@ export const OrderDetailOutputSchema = OrderSummarySchema.extend({
   })
 });
 
-export type ListOrdersInput = z.infer<typeof ListOrdersInputSchema>;
+export type ListOrdersInput = z.input<typeof ListOrdersInputSchema>;
 export type GetOrderDetailInput = z.infer<typeof GetOrderDetailInputSchema>;
 
 export interface OrderToolDependencies {

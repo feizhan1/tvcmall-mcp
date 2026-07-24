@@ -108,7 +108,7 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_list_orders',
-    { title: 'TVCMall List Orders', description: '用于按状态或日期分页查询订单列表；已知 order_id 并需要商品、金额或收货信息时，使用 tvcmall_get_order_detail。', inputSchema: ListOrdersInputSchema, outputSchema: ListOrdersOutputSchema },
+    { title: 'TVCMall List Orders', description: '用于按 WebApi 状态或日期分页查询订单列表。status：全部或未指定为 V3All；待付款为 V3Unpaid；待确认为 V3AwaitingConfirmation；备货中为 V3Preparing；已发货为 V3Shipped；已完成为 V3Done。已知 order_id 并需要商品、金额或收货信息时，使用 tvcmall_get_order_detail。', inputSchema: ListOrdersInputSchema, outputSchema: ListOrdersOutputSchema },
     async (input) => handleToolCall('tvcmall_list_orders', logger, () => listOrdersForMcp(input, { authContext, orderClient }))
   );
 

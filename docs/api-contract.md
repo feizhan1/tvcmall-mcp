@@ -241,7 +241,7 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 | `tvcmall_search_products` | `query`、`page=1`、`page_size=20`（最大 50） | 查询词、分页、总数、商品摘要列表 | `catalog.read`；商品搜索 route |
 | `tvcmall_get_product_detail` | `product_id` | SKU、标题、价格、库存、MOQ、尺寸、属性、图片 | `catalog.read`；商品详情 route |
 | `tvcmall_estimate_shipping` | `sku`、`quantity`（1..1000）、两位 `countrycode` | 目的地、计费重量、币种、运输方案摘要 | `catalog.read`；运费试算 route |
-| `tvcmall_list_orders` | 可选日期/状态、`page=1`、`page_size=20`（最大 50） | 分页、总数、订单号/状态/金额摘要 | `order.read`；订单列表 route |
+| `tvcmall_list_orders` | 可选日期、`status=V3All`、`page=1`、`page_size=20`（最大 50） | 分页、总数、订单号/状态/金额摘要 | `order.read`；订单列表 route |
 | `tvcmall_get_order_detail` | `order_id` | 商品、金额和后端脱敏后的收货信息 | `order.read`；订单详情 route |
 | `tvcmall_get_tracking_info` | `order_id` | 承运商、单号、状态、事件和可用的订单运费 | `order.read`；物流 route |
 | `tvcmall_batch_get_tracking` | `order_ids`（1..50） | 命中数量和物流摘要列表 | `order.read`；逐个调用物流 route |
@@ -299,13 +299,13 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 {
   "start_date": "2026-07-01",
   "end_date": "2026-07-20",
-  "status": "shipped",
+  "status": "V3Shipped",
   "page": 1,
   "page_size": 20
 }
 ```
 
-`status` 可为 `pending`、`processing`、`shipped`、`delivered`、`cancelled`。日期格式与后端最终约束需保持一致；无筛选时不得隐式扩大到无限分页。
+`status` 可为 `V3All`（默认，全部订单）、`V3Unpaid`（待付款）、`V3AwaitingConfirmation`（待确认）、`V3Preparing`（备货中）、`V3Shipped`（已发货）或 `V3Done`（已完成）。日期格式与后端最终约束需保持一致；无筛选时不得隐式扩大到无限分页。
 
 订单详情：
 

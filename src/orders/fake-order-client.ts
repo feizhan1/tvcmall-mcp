@@ -7,7 +7,6 @@ export class FakeOrderClient implements OrderClient {
     const page = Math.max(1, input.page);
     const pageSize = Math.min(Math.max(1, input.page_size), 50);
     const filtered = FIXTURE_ORDERS.filter((order) => {
-      if (input.status && order.status !== input.status) return false;
       if (input.start_date && order.created_at < input.start_date) return false;
       if (input.end_date && order.created_at > input.end_date) return false;
       return true;
