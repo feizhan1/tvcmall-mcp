@@ -96,7 +96,8 @@ function readWebApiBaseUrl(value: string | undefined, apiEnv: TvcMallApiEnv, all
     throw new Error('TVCMALL_WEBAPI_BASE_URL must not include userinfo');
   }
   if (parsed.protocol === 'https:') return url;
-  if (parsed.protocol === 'http:' && (allowInsecureWebApiHttp || (apiEnv === 'sandbox' && isSandboxHttpHost(parsed.hostname)))) return url;
+  if (parsed.protocol !== 'http:') throw new Error('TVCMALL_WEBAPI_BASE_URL must use HTTPS or HTTP');
+  if (allowInsecureWebApiHttp || (apiEnv === 'sandbox' && isSandboxHttpHost(parsed.hostname))) return url;
   throw new Error('TVCMALL_WEBAPI_BASE_URL requires TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP=true for HTTP');
 }
 

@@ -62,6 +62,22 @@ describe('runtime config', () => {
     });
   });
 
+  it('rejects non-HTTP(S) WebApi URLs even with the insecure HTTP switch without exposing the URL', () => {
+    const webApiBaseUrl = 'ftp://113.108.60.83:8084/api';
+    let error: unknown;
+    try {
+      loadRuntimeConfig({
+        TVCMALL_WEBAPI_BASE_URL: webApiBaseUrl,
+        TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP: 'true'
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({ message: 'TVCMALL_WEBAPI_BASE_URL must use HTTPS or HTTP' });
+    expect(String(error)).not.toContain(webApiBaseUrl);
+  });
+
   it.each([
     ['userinfo', 'http://mcp-user:top-secret@113.108.60.83:8084/api', 'mcp-user', 'top-secret'],
     ['query parameters', 'http://113.108.60.83:8084/api?secret=query-value', 'query-value', undefined],
