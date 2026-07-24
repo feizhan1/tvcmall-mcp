@@ -98,7 +98,8 @@ Existing TVCMall WebApi routes + Authorization: Bearer 同一 PAT
 
 ### 阶段 2：WebApi PAT 透传
 
-- 配置 `TVCMALL_API_ENV` 和 `TVCMALL_WEBAPI_BASE_URL`：`production`、`staging` 强制 HTTPS；仅 `sandbox` 可连接 loopback 或 RFC1918 的 HTTP WebApi。
+- 配置 `TVCMALL_API_ENV`、`TVCMALL_WEBAPI_BASE_URL` 和 `TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP`：`HTTPS` 始终可用；开关默认 `false`，仅 `value?.trim() === 'true'` 时启用 HTTP 覆盖。开关关闭时，只有显式 `sandbox` 可连接 loopback 或 RFC1918 的 HTTP WebApi；严格设为 `true` 后，`production`、`staging`、`sandbox` 及其他环境均可使用任意 host/port 的 HTTP WebApi。HTTP 会以明文传输 PAT、请求和响应，只能用于受控网络的临时调试；URL 始终拒绝 userinfo、query 和 fragment。
+- 出站 HTTP 覆盖不降低 MCP Client 到 `/mcp` 的 HTTPS/TLS 要求、PAT 仅在当前 session 内存并在关闭路径清理的生命周期规则，或日志、异常和 tool 输出的强制脱敏。
 - 所有真实业务 client 使用 session 中的同一 PAT，只添加一次 `Bearer `。
 - 对接现有商品、订单、物流、运费、积分和余额流水 routes。
 - 统一映射 WebApi 状态、网络、超时与正文读取错误。
@@ -129,7 +130,7 @@ MVP 完成标准：
 6. `catalog.read` / `order.read` 和 route allowlist 由 WebApi 后端执行；MCP 不在本地推断授权。
 7. WebApi `401` / `403` / `429` / `5xx` 及网络、超时、正文读取失败映射为稳定错误码。
 8. `DELETE /mcp`、transport `onclose`、idle TTL 和 server close 都会释放 session 中的 PAT 与指纹。
-9. `TVCMALL_WEBAPI_BASE_URL` 缺失、包含 userinfo/query/fragment，或不符合环境协议/host allowlist 时拒绝启动；仅显式 `sandbox` 可使用 loopback/RFC1918 HTTP，`production` 与 `staging` 强制 HTTPS。
+9. `TVCMALL_WEBAPI_BASE_URL` 缺失、包含 userinfo/query/fragment 时拒绝启动；`TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`，开关关闭时 HTTP 仅允许显式 `sandbox` 的 loopback/RFC1918 host，且仅 `value?.trim() === 'true'` 时允许 `production`、`staging`、`sandbox` 及其他环境使用任意 host/port 的 HTTP。该明文 PAT、请求和响应链路仅可用于受控网络的临时调试，并不降低 `/mcp` HTTPS/TLS、PAT session 内存生命周期或日志强制脱敏。
 10. 项目不开放写操作，也不提供文件导出能力。
 
 ## 8. 主要风险与缓解
@@ -144,7 +145,7 @@ MVP 完成标准：
 | PII 经 AI 扩散 | 后端先授权与脱敏；tool 只返回任务必要摘要，避免透传完整响应 |
 | 客户端实现差异 | 分别验证主流 MCP Client 的自定义 header、Streamable HTTP 与 session header 支持 |
 | 服务重启丢失 session | session 仅内存是安全要求；客户端收到 `SESSION_NOT_FOUND` 后重新 initialize |
-| sandbox HTTP 误连非受控目标 | 只允许显式 `sandbox` 的 loopback/RFC1918 host；拒绝公网、普通域名、link-local 与 CGNAT；仅使用隔离网络和可撤销测试 PAT |
+| WebApi HTTP 误连或明文泄漏 | 默认只允许显式 `sandbox` 的 loopback/RFC1918 host；仅严格设为 `true` 的 `TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 可在任意环境、任意 host/port 使用 HTTP。明文 PAT、请求和响应风险由部署人员承担，只能用于受控网络和临时调试 |
 
 ## 9. 上线前决策
 

@@ -90,7 +90,9 @@ npm test -- tests/integration/mcp-stdio.test.ts
 
 每个真实 HTTP client 都应通过注入 fetch/stub server 验证：
 
-- base URL 来自 `TVCMALL_WEBAPI_BASE_URL`，无 userinfo/query/fragment；`production` / `staging` 强制 HTTPS，只有显式 `sandbox` 可使用 loopback 或 RFC1918 HTTP。
+- base URL 来自 `TVCMALL_WEBAPI_BASE_URL`，始终拒绝 userinfo/query/fragment。`TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`，仅 `value?.trim() === 'true'` 启用 HTTP 覆盖；开关关闭时，只有显式 `sandbox` 可使用 loopback 或 RFC1918 HTTP。
+- 开关严格设为 `true` 后，`production`、`staging`、`sandbox` 及其他环境均可使用任意 host/port 的 HTTP WebApi。PAT、请求和响应会经过明文链路，风险由部署人员承担，只能用于受控网络的临时调试。
+- 出站覆盖不改变 MCP Client 到 `/mcp` 的 HTTPS/TLS 要求、PAT 仅在当前 session 内存并在 `DELETE` / `onclose` / idle TTL / server close 时清理的生命周期，或日志、异常和 tool 输出的强制脱敏。
 - URL 使用现有 TVCMall WebApi route，不创建 MCP 专用业务 route。
 - 当前 session PAT 原样进入 WebApi `Authorization: Bearer <PAT>`，且 `Bearer ` 只增加一次。
 - request schema、分页和批量上限与 tool 契约一致。
@@ -99,7 +101,7 @@ npm test -- tests/integration/mcp-stdio.test.ts
 
 测试 MCP 层时应使用 fake/stub WebApi；测试 WebApi response mapping 时优先使用 `docs/external/` 中脱敏后的契约样例。
 
-本地 sandbox 联调可使用 `.env.local` 与 `npm run dev:local`，但 `.env.local` 必须被 Git 忽略且不含 `TVCMALL_API_KEY` 或 PAT。它只连接隔离网络中的 loopback/RFC1918 HTTP WebApi，并使用可撤销测试 PAT；自动化测试仍优先使用 stub/fake 依赖。
+本地 sandbox 联调可使用 `.env.local` 与 `npm run dev:local`，但 `.env.local` 必须被 Git 忽略且不含 `TVCMALL_API_KEY` 或 PAT。默认情况下，它只连接隔离网络中的 loopback/RFC1918 HTTP WebApi，并使用可撤销测试 PAT；如需临时调试任意 HTTP host/port，必须显式设置严格 `true` 的 `TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 并承担明文链路风险。自动化测试仍优先使用 stub/fake 依赖。
 
 ## 真实 HTTP 集成
 
