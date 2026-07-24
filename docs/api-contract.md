@@ -129,11 +129,11 @@ MCP 的稳定 tool 错误码只依赖 HTTP status 和这个单一 response heade
 
 ### 4.1.2 WebApi 传输环境
 
-`TVCMALL_API_ENV` 可为 `production`、`staging` 或 `sandbox`；未设置或非法值回退为 `production`。`HTTPS` 在所有合法环境中允许，而 `production`、`staging` 及回退的 `production` 必须使用 HTTPS WebApi URL。
+`TVCMALL_API_ENV` 可为 `production`、`staging` 或 `sandbox`；未设置或非法值回退为 `production`。`HTTPS` 在所有环境都允许。`TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`，仅当 `value?.trim() === 'true'` 时启用 HTTP 覆盖；未设置、空白或其他值均不启用。
 
-只有显式 `sandbox` 可使用 `http://`，且 hostname 只能是 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段：`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`。校验只使用 URL hostname，不进行 DNS 解析；普通 hostname、公网 IP、link-local `169.254.0.0/16`、CGNAT `100.64.0.0/10` 和非 loopback IPv6 均被拒绝。无论环境如何，base URL 都不得含 userinfo、query 或 fragment。
+开关关闭时，只有显式 `sandbox` 可使用 `http://`，且 hostname 只能是 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段：`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`。校验只使用 URL hostname，不进行 DNS 解析；普通 hostname、公网 IP、link-local `169.254.0.0/16`、CGNAT `100.64.0.0/10` 和非 loopback IPv6 均被拒绝。
 
-sandbox HTTP 仅用于隔离网络的本地联调，并且只可使用可撤销的测试 PAT；它不改变 MCP Client 到公网 `/mcp` 的 HTTPS/TLS 要求，也不能用于生产客户 PAT。
+开关严格设为 `true` 后，`production`、`staging`、`sandbox` 及其他环境均可使用任意 host/port 的 `http://` WebApi URL。HTTP 会以明文传输 PAT、请求和响应，部署人员必须承担风险，并且只能在受控网络的临时调试中启用。该开关只影响 MCP Server 到 WebApi 的出站传输：不改变 MCP Client 到公网 `/mcp` 的 HTTPS/TLS 要求、PAT 仅存当前 session 内存的规则，或日志、异常和 tool 输出的强制脱敏。无论开关和环境如何，base URL 都不得含 userinfo、query 或 fragment。
 
 ### 4.2 WebApi 授权链
 
@@ -384,7 +384,8 @@ WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/sc
 
 | 变量 | 必填 | 默认值 | 校验 |
 | --- | --- | --- | --- |
-| `TVCMALL_WEBAPI_BASE_URL` | 是 | 无 | 包含实际 WebApi 基础路径（示例 `/api`）；`production` / `staging` 必须 HTTPS，只有 `sandbox` 可使用受限的 loopback/RFC1918 HTTP；无 userinfo/query/fragment |
+| `TVCMALL_WEBAPI_BASE_URL` | 是 | 无 | 包含实际 WebApi 基础路径（示例 `/api`）；无 userinfo/query/fragment |
+| `TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` | 否 | `false` | 仅 `value?.trim() === 'true'` 启用；允许所有环境、任意 host/port 使用 `http://` WebApi，明文传输 PAT、请求和响应，只限受控临时调试 |
 | `TVCMALL_API_TIMEOUT_MS` | 否 | `15000` | `1..2_147_483_647` 范围内的整数，毫秒 |
 | `TVCMALL_API_ENV` | 否 | `production` | `production` / `staging` / `sandbox` |
 | `TVCMALL_MCP_HOST` | 否 | `127.0.0.1` | 非空字符串 |
@@ -405,7 +406,7 @@ PAT 不属于 server runtime config。禁止以环境变量配置一个供所有
 - [ ] `TVCMALL_API_KEY` 格式、每请求发送、旧 `Authorization` 拒绝和 session 指纹绑定有测试。
 - [ ] PAT 原文仅存在于当前 session 内存，所有关闭路径均清理。
 - [ ] WebApi 请求使用相同 PAT，并只添加一次 `Bearer `。
-- [ ] WebApi URL 拒绝 userinfo/query/fragment；`production` / `staging` 强制 HTTPS，HTTP 只允许显式 `sandbox` 的 loopback/RFC1918 host。
+- [ ] WebApi URL 始终拒绝 userinfo/query/fragment；默认 HTTP 只允许显式 `sandbox` 的 loopback/RFC1918 host，而仅 `TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 严格为 `true` 时允许所有环境、任意 host/port 的 HTTP，并验证明文风险不放宽 `/mcp` HTTPS、PAT 内存或日志脱敏。
 - [ ] 所有业务 routes 都是现有 WebApi routes，并已确认 method + normalized route allowlist。
 - [ ] `catalog.read` 与 `order.read` 由 ApplicationServices/RDS 判断，MCP 不做本地 scope 放行。
 - [ ] 401/403/429/5xx、网络、超时与 body read failure 的项目错误映射稳定；非法输入由 MCP SDK 返回 `Invalid params`（`-32602`）。

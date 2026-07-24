@@ -39,7 +39,7 @@
 - tool 输出应提供 AI 友好摘要与受控结构化内容，不原样透出超大 WebApi 响应、PAT 或完整 PII。
 - 只复用权威接入说明列出的现有 WebApi route；不得新增 `/api/mcp/v1/...` 业务 route，也不得在 MCP 侧绕过 route allowlist。
 - WebApi `401` 映射为 `AUTH_REQUIRED`，`403` 映射为 `PERMISSION_DENIED`，`429` 映射为 `RATE_LIMITED`，`5xx`、网络、超时和正文读取失败映射为 `API_UNAVAILABLE`。
-- `TVCMALL_WEBAPI_BASE_URL` 必须显式配置且不得包含 userinfo、query 或 fragment。`production`、`staging`、未设置或非法 `TVCMALL_API_ENV` 必须使用 HTTPS；只有显式 `sandbox` 可以使用 `localhost`、`[::1]`、loopback 或 RFC1918 地址的 HTTP，且仅限隔离网络与可撤销测试 PAT。
+- `TVCMALL_WEBAPI_BASE_URL` 必须显式配置且不得包含 userinfo、query 或 fragment。`HTTPS` 始终允许；`TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`，仅 `value?.trim() === 'true'` 才允许所有环境、任意 host/port 使用 HTTP。开关关闭时，HTTP 仅允许显式 `sandbox` 的 `localhost`、`[::1]`、loopback 或 RFC1918 地址；开关开启会以明文传输 PAT、请求和响应，只能用于受控、临时调试，且不改变 `/mcp` HTTPS、PAT 内存规则或日志强制脱敏。
 
 ## 6. 建议目录结构
 

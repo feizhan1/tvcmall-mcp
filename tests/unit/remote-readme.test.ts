@@ -156,9 +156,10 @@ describe('remote Streamable HTTP documentation', () => {
     }
   });
 
-  it('documents sandbox private HTTP without weakening production HTTPS', () => {
+  it('documents the default sandbox HTTP restriction and explicit WebApi HTTP override', () => {
     for (const document of [readme, apiContract, architecture, authorityDoc]) {
       for (const term of [
+        'TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP',
         'TVCMALL_API_ENV',
         'sandbox',
         'RFC1918',
@@ -170,6 +171,12 @@ describe('remote Streamable HTTP documentation', () => {
       }
     }
 
+    expect(apiContract).toContain('默认 `false`');
+    expect(apiContract).toContain("value?.trim() === 'true'");
+    expect(readme).toContain('http://113.108.60.83:8084/api');
+    expect(readme).toContain(`export TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP=true
+export TVCMALL_WEBAPI_BASE_URL=http://113.108.60.83:8084/api
+docker compose -f compose.staging.yaml up -d`);
     expect(readme).toContain('.env.local');
     expect(readme).toContain('npm run dev:local');
     expect(readme).not.toContain('TVCMALL_API_KEY=tmcp_v1_');

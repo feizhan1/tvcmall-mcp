@@ -122,9 +122,12 @@ IMAGE_REPOSITORY=crpi-xjd40982wqk3bdon-vpc.cn-shenzhen.personal.cr.aliyuncs.com/
 
 ```bash
 export TVCMALL_MCP_IMAGE=crpi-xjd40982wqk3bdon.cn-shenzhen.personal.cr.aliyuncs.com/tvcmall/tvcmall-mcp:1ee30ec
-export TVCMALL_WEBAPI_BASE_URL=https://staging-webapi.example.com/api
+export TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP=true
+export TVCMALL_WEBAPI_BASE_URL=http://113.108.60.83:8084/api
 docker compose -f compose.staging.yaml up -d
 ```
+
+上例只用于受控、临时的预发布调试：`TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP=true` 会让 MCP Server 到 WebApi 的 PAT、请求和响应经过明文 HTTP 链路，风险由部署人员承担。常规预发布和生产部署应保持 `TVCMALL_WEBAPI_BASE_URL=https://...`，并删除该开关。
 
 生产部署：
 
@@ -148,7 +151,8 @@ TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `TVCMALL_WEBAPI_BASE_URL` | 无，必填 | 现有 TVCMall WebApi 基础 URL；必须包含实际基础路径（示例 `/api`）；`production` / `staging` 必须使用 HTTPS，`sandbox` 才可受限使用私网 HTTP；不得包含 userinfo、query 或 fragment |
+| `TVCMALL_WEBAPI_BASE_URL` | 无，必填 | 现有 TVCMall WebApi 基础 URL；必须包含实际基础路径（示例 `/api`）；不得包含 userinfo、query 或 fragment |
+| `TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` | `false` | 仅当 `value?.trim() === 'true'` 时，允许 MCP Server 在任意 `TVCMALL_API_ENV`、任意 host/port 调用 `http://` WebApi；明文链路会传输 PAT、请求和响应，只限受控、临时调试 |
 | `TVCMALL_API_TIMEOUT_MS` | `15000` | WebApi 请求超时，单位毫秒；合法范围 `1..2_147_483_647` |
 | `TVCMALL_API_ENV` | `production` | API 环境标识：`production`、`staging` 或 `sandbox`；未设置或非法值按 `production` 处理 |
 | `TVCMALL_MCP_HOST` | `127.0.0.1` | HTTP 监听地址；生产环境通常由反向代理访问 |
@@ -172,7 +176,9 @@ TVCMALL_MCP_BIND_ADDRESS=0.0.0.0 TVCMALL_MCP_PORT=8080 docker compose -f compose
 
 `mcp_tool_completed` 继续只提供 tool 的摘要、错误码和定位字段，不复制 query、headers 或 request/response body。排障时应通过其 `traceId` 查询同一请求的 `mcp_webapi_request_completed`。
 
-`HTTPS` 在所有合法环境均可使用。`production`、`staging`、未设置环境或非法环境均强制 `HTTPS`。只有显式 `TVCMALL_API_ENV=sandbox` 时，才允许 `http://` 指向 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）。此校验不做 DNS 解析；普通域名、公网、链路本地 `169.254.0.0/16`、CGNAT `100.64.0.0/10` 与其他 IPv6 地址都被拒绝。所有环境仍拒绝 URL userinfo、query 和 fragment。
+`HTTPS` 在所有环境都允许。`TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP` 默认 `false`，且仅 `value?.trim() === 'true'` 才会启用 HTTP 覆盖；未设置、空白或其他值都保持关闭。开关关闭时，只有显式 `TVCMALL_API_ENV=sandbox` 才可让 `http://` 指向 `localhost`、`[::1]`、`127.0.0.0/8` 或 RFC1918 地址段（`10.0.0.0/8`、`172.16.0.0/12`、`192.168.0.0/16`）；此校验不做 DNS 解析，普通 hostname、公网、链路本地 `169.254.0.0/16`、CGNAT `100.64.0.0/10` 与其他 IPv6 地址都会被拒绝。
+
+当开关严格设为 `true` 时，`production`、`staging`、`sandbox` 及其他环境都可以使用任意 host/port 的 `http://` WebApi URL。该覆盖只影响 MCP Server 到 WebApi 的出站链路，不改变 MCP Client 到 `/mcp` 的 HTTPS/TLS 要求、PAT 仅存在当前 session 内存的规则，或日志、异常和 tool 输出的强制脱敏。HTTP 会以明文传输 PAT、请求和响应；部署人员必须承担这一风险，并仅在受控网络、临时调试中启用。无论开关状态，URL 都继续拒绝 userinfo、query 和 fragment。
 
 ### 本地 sandbox 联调
 
@@ -183,7 +189,7 @@ cp .env.example .env.local
 npm run dev:local
 ```
 
-`npm run dev:local` 和构建后的 `npm run start:local` 才会显式读取 `.env.local`；原 `npm run dev`、`npm start` 和生产部署仍由平台注入环境变量。`.env.local` 不得保存 `TVCMALL_API_KEY` 或 PAT，PAT 只能由 MCP Client 在每个请求中提供。sandbox HTTP 仅用于隔离网络和可撤销测试 PAT，不能降低公网 `/mcp` 的 HTTPS/TLS 要求，也不能使用生产客户 PAT。
+`npm run dev:local` 和构建后的 `npm run start:local` 才会显式读取 `.env.local`；原 `npm run dev`、`npm start` 和生产部署仍由平台注入环境变量。`.env.local` 不得保存 `TVCMALL_API_KEY` 或 PAT，PAT 只能由 MCP Client 在每个请求中提供。默认 sandbox HTTP 仅用于隔离网络和可撤销测试 PAT，不能降低公网 `/mcp` 的 HTTPS/TLS 要求，也不能使用生产客户 PAT；不要把显式 HTTP 覆盖作为常规本地或生产配置。
 
 本地联调默认会在运行 `npm run dev:local` 的终端 stderr 显示安全诊断日志；如需静默运行，显式设置 `TVCMALL_LOG_LEVEL=silent`。
 
