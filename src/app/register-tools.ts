@@ -61,31 +61,31 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_auth_status',
-    { title: 'TVCMall Auth Status', description: '检查当前 TVCMall MCP 是否已登录', inputSchema: z.object({}), outputSchema: AuthStatusOutputSchema },
+    { title: 'TVCMall Auth Status', description: '用于检查当前 MCP 会话是否已配置 TVCMALL_API_KEY；仅返回配置状态，不验证凭证有效性，也不调用 WebApi。', inputSchema: z.object({}), outputSchema: AuthStatusOutputSchema },
     async () => handleToolCall('tvcmall_auth_status', logger, () => createAuthStatusToolResult(authContext))
   );
 
   server.registerTool(
     'tvcmall_search_products',
-    { title: 'TVCMall Search Products', description: '通过 TVCMall WebApi 只读搜索商品', inputSchema: SearchProductsInputSchema, outputSchema: SearchProductsOutputSchema },
+    { title: 'TVCMall Search Products', description: '用于按关键词分页搜索商品；已知 product_id 并需要 SKU、价格、库存或属性详情时，使用 tvcmall_get_product_detail。', inputSchema: SearchProductsInputSchema, outputSchema: SearchProductsOutputSchema },
     async (input) => handleToolCall('tvcmall_search_products', logger, () => searchProductsForMcp(input, { authContext, productClient }))
   );
 
   server.registerTool(
     'tvcmall_get_product_detail',
-    { title: 'TVCMall Get Product Detail', description: '通过 TVCMall WebApi 只读查询商品详情', inputSchema: GetProductDetailInputSchema, outputSchema: ProductDetailSchema },
+    { title: 'TVCMall Get Product Detail', description: '用于按 product_id 查询单个商品的 SKU、价格、库存和属性详情；需要按关键词查找商品时，使用 tvcmall_search_products。', inputSchema: GetProductDetailInputSchema, outputSchema: ProductDetailSchema },
     async (input) => handleToolCall('tvcmall_get_product_detail', logger, () => getProductDetailForMcp(input, { authContext, productClient }))
   );
 
   server.registerTool(
     'tvcmall_get_points',
-    { title: 'TVCMall Get Points', description: '查询当前客户 TVCMall 积分', inputSchema: GetPointsInputSchema, outputSchema: PointsStatOutputSchema },
+    { title: 'TVCMall Get Points', description: '用于查询当前客户的积分汇总；需要逐笔积分获取和使用记录时，使用 tvcmall_list_point_records。', inputSchema: GetPointsInputSchema, outputSchema: PointsStatOutputSchema },
     async (input) => handleToolCall('tvcmall_get_points', logger, () => getPointsForMcp(input, { authContext, pointsClient }))
   );
 
   server.registerTool(
     'tvcmall_list_point_records',
-    { title: 'TVCMall List Point Records', description: '查询当前客户 TVCMall 积分获取和使用记录', inputSchema: ListPointRecordsInputSchema, outputSchema: ListPointRecordsOutputSchema },
+    { title: 'TVCMall List Point Records', description: '用于分页查询当前客户的积分获取和使用记录；需要积分汇总时，使用 tvcmall_get_points。', inputSchema: ListPointRecordsInputSchema, outputSchema: ListPointRecordsOutputSchema },
     async (input) => handleToolCall('tvcmall_list_point_records', logger, () => listPointRecordsForMcp(input, { authContext, pointsClient }))
   );
 
@@ -93,7 +93,7 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
     'tvcmall_list_balance_records',
     {
       title: 'TVCMall List Balance Records',
-      description: '分页查询当前客户的余额获取和消耗流水；可使用 all、income、expense 筛选',
+      description: '用于按 all、income 或 expense 分页查询当前客户的余额流水；积分查询请使用 tvcmall_get_points 或 tvcmall_list_point_records。',
       inputSchema: ListBalanceRecordsInputSchema,
       outputSchema: ListBalanceRecordsOutputSchema
     },
@@ -102,31 +102,31 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_estimate_shipping',
-    { title: 'TVCMall Estimate Shipping', description: '按商品 SKU、数量和目的国家/地区代码 countrycode 预估未下单商品运费；入参为 sku、quantity、countrycode。如果用户提供订单号并询问订单运费、物流费用、shipping fee、freight 或 delivery cost，请不要调用本工具，必须使用 tvcmall_get_tracking_info。', inputSchema: EstimateShippingInputSchema, outputSchema: EstimateShippingOutputSchema },
+    { title: 'TVCMall Estimate Shipping', description: '用于按 sku、quantity 和 countrycode 预估未下单商品的运费；已有订单的物流、运费、shipping fee、freight 或 delivery cost 必须使用 tvcmall_get_tracking_info。', inputSchema: EstimateShippingInputSchema, outputSchema: EstimateShippingOutputSchema },
     async (input) => handleToolCall('tvcmall_estimate_shipping', logger, () => estimateShippingForMcp(input, { authContext, shippingClient }))
   );
 
   server.registerTool(
     'tvcmall_list_orders',
-    { title: 'TVCMall List Orders', description: '通过 TVCMall WebApi 只读查询订单列表', inputSchema: ListOrdersInputSchema, outputSchema: ListOrdersOutputSchema },
+    { title: 'TVCMall List Orders', description: '用于按状态或日期分页查询订单列表；已知 order_id 并需要商品、金额或收货信息时，使用 tvcmall_get_order_detail。', inputSchema: ListOrdersInputSchema, outputSchema: ListOrdersOutputSchema },
     async (input) => handleToolCall('tvcmall_list_orders', logger, () => listOrdersForMcp(input, { authContext, orderClient }))
   );
 
   server.registerTool(
     'tvcmall_get_order_detail',
-    { title: 'TVCMall Get Order Detail', description: '查询 TVCMall 订单商品、金额、地址等详情；订单物流和运费查询请使用 tvcmall_get_tracking_info。', inputSchema: GetOrderDetailInputSchema, outputSchema: OrderDetailOutputSchema },
+    { title: 'TVCMall Get Order Detail', description: '用于按 order_id 查询订单商品、金额和后端已脱敏的收货信息；订单物流、物流轨迹或运费必须使用 tvcmall_get_tracking_info。', inputSchema: GetOrderDetailInputSchema, outputSchema: OrderDetailOutputSchema },
     async (input) => handleToolCall('tvcmall_get_order_detail', logger, () => getOrderDetailForMcp(input, { authContext, orderClient }))
   );
 
   server.registerTool(
     'tvcmall_get_tracking_info',
-    { title: 'TVCMall Get Tracking Info', description: '查询单个 TVCMall 订单的物流和运费信息。当用户询问订单物流、物流轨迹、运费、shipping fee、freight、delivery cost 时，优先使用本工具。', inputSchema: GetTrackingInfoInputSchema, outputSchema: TrackingInfoOutputSchema },
+    { title: 'TVCMall Get Tracking Info', description: '用于按单个 order_id 查询订单物流轨迹和订单运费；多个订单同时查询时，使用 tvcmall_batch_get_tracking。', inputSchema: GetTrackingInfoInputSchema, outputSchema: TrackingInfoOutputSchema },
     async (input) => handleToolCall('tvcmall_get_tracking_info', logger, () => getTrackingInfoForMcp(input, { authContext, trackingClient }))
   );
 
   server.registerTool(
     'tvcmall_batch_get_tracking',
-    { title: 'TVCMall Batch Get Tracking', description: '批量查询 TVCMall 订单物流和运费信息；单个订单物流或运费优先使用 tvcmall_get_tracking_info。', inputSchema: BatchGetTrackingInputSchema, outputSchema: BatchTrackingOutputSchema },
+    { title: 'TVCMall Batch Get Tracking', description: '用于批量查询多个订单的物流和订单运费；只有单个订单时，使用 tvcmall_get_tracking_info。', inputSchema: BatchGetTrackingInputSchema, outputSchema: BatchTrackingOutputSchema },
     async (input) => handleToolCall('tvcmall_batch_get_tracking', logger, () => batchGetTrackingForMcp(input, { authContext, trackingClient }))
   );
 
