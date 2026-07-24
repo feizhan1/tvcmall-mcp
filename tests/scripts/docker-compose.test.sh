@@ -12,10 +12,22 @@ fi
 assert_compose_file() {
   local environment=$1
   local compose_file="$repo_root/compose.$environment.yaml"
+  local default_config
+  local insecure_http_config
 
-  TVCMALL_MCP_IMAGE='registry.example/tvcmall/tvcmall-mcp:abc1234' \
-  TVCMALL_WEBAPI_BASE_URL='https://webapi.example.com/api' \
-    docker compose -f "$compose_file" config --quiet
+  default_config=$(
+    unset TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP
+    TVCMALL_MCP_IMAGE='registry.example/tvcmall/tvcmall-mcp:abc1234' \
+      TVCMALL_WEBAPI_BASE_URL='https://webapi.example.com/api' \
+        docker compose -f "$compose_file" config
+  )
+  printf '%s\n' "$default_config" | rg --fixed-strings --quiet -- 'TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP: "false"'
+
+  insecure_http_config=$(TVCMALL_MCP_IMAGE='registry.example/tvcmall/tvcmall-mcp:abc1234' \
+    TVCMALL_WEBAPI_BASE_URL='http://webapi.example.com/api' \
+    TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP=true \
+      docker compose -f "$compose_file" config)
+  printf '%s\n' "$insecure_http_config" | rg --fixed-strings --quiet -- 'TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP: "true"'
 
   rg --fixed-strings --quiet -- 'image: ${TVCMALL_MCP_IMAGE:?' "$compose_file"
   rg --fixed-strings --quiet -- "TVCMALL_API_ENV: $environment" "$compose_file"
