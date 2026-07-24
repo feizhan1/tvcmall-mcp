@@ -58,7 +58,7 @@ describe('createTvcMallMcpServer', () => {
       tvcmall_list_point_records: '用于分页查询当前客户的积分获取和使用记录；需要积分汇总时，使用 tvcmall_get_points。',
       tvcmall_list_balance_records: '用于按 all、income 或 expense 分页查询当前客户的余额流水；积分查询请使用 tvcmall_get_points 或 tvcmall_list_point_records。',
       tvcmall_estimate_shipping: '用于按 sku、quantity 和 countrycode 预估未下单商品的运费；已有订单的物流、运费、shipping fee、freight 或 delivery cost 必须使用 tvcmall_get_tracking_info。',
-      tvcmall_list_orders: '用于按 WebApi 状态或日期分页查询订单列表。status：全部或未指定为 V3All；待付款为 V3Unpaid；待确认为 V3AwaitingConfirmation；备货中为 V3Preparing；已发货为 V3Shipped；已完成为 V3Done。已知 order_id 并需要商品、金额或收货信息时，使用 tvcmall_get_order_detail。',
+      tvcmall_list_orders: '用于按日期和订单状态分页查询。根据用户意图设置 status：未指定或查询全部为 V3All；待付款为 V3Unpaid；待确认为 V3AwaitingConfirmation；备货中为 V3Preparing；已发货为 V3Shipped；已完成为 V3Done。已知 order_id 且需要商品、金额或收货信息时，使用 tvcmall_get_order_detail。',
       tvcmall_get_order_detail: '用于按 order_id 查询订单商品、金额和后端已脱敏的收货信息；订单物流、物流轨迹或运费必须使用 tvcmall_get_tracking_info。',
       tvcmall_get_tracking_info: '用于按单个 order_id 查询订单物流轨迹和订单运费；多个订单同时查询时，使用 tvcmall_batch_get_tracking。',
       tvcmall_batch_get_tracking: '用于批量查询多个订单的物流和订单运费；只有单个订单时，使用 tvcmall_get_tracking_info。'
