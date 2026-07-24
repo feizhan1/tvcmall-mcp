@@ -123,6 +123,31 @@ X-TVCMall-MCP-Auth-Reason: scope_missing | route_not_registered | route_disabled
 | `route_not_registered` | method + normalized route 未登记到 allowlist |
 | `route_disabled` | route 已登记但 `enabled=0` |
 
+MCP 只读取 HTTP status 和这个单一 response header，不读取失败 response body；只有精确匹配表中值的 `authReason` 才写入失败 tool 日志。header 缺失或未知值时省略 `authReason`，并通过 trace ID 查询 WebApi/ApplicationServices 审计日志。该可选 header 只帮助诊断，绝不改变 WebApi 的授权决定或 MCP tool 的稳定错误码。
+
+### 4.1.2 WebApi 传输环境
+
+每次 WebApi 请求都由 MCP 生成一个不从 PAT、session、客户信息或请求参数派生的 UUID `traceId`，并附加以下仅用于观测的 header：
+
+```http
+X-TVCMall-MCP-Client: tvcmall-mcp-server
+X-TVCMall-MCP-Trace-Id: {uuid}
+```
+
+这两个 header 不参与 PAT 校验、scope 判断或 method + normalized route allowlist，WebApi/ApplicationServices 必须将 `X-TVCMall-MCP-Trace-Id` 与安全的授权决策日志关联。该审计日志可记录 trace ID、HTTP method、normalized route、HTTP status 和拒绝分类，但不得记录 PAT、`Authorization`、请求参数、完整 URL/query、响应正文或 PII。
+
+对于 MCP PAT 的 `403`，WebApi 可选返回以下 response header：
+
+```http
+X-TVCMall-MCP-Auth-Reason: scope_missing | route_not_registered | route_disabled
+```
+
+| 值 | 含义 |
+| --- | --- |
+| `scope_missing` | PAT 不具备该 route 所要求的 scope |
+| `route_not_registered` | method + normalized route 未登记到 allowlist |
+| `route_disabled` | route 已登记但 `enabled=0` |
+
 MCP 的稳定 tool 错误码只依赖 HTTP status 和这个单一 response header；失败 response body 不进入 `WebApiRequestError`、MCP tool 输出或 `mcp_tool_completed`。为排障，MCP 会读取 response body 并仅将强制脱敏、截断后的快照写入 `mcp_webapi_request_completed.webApiResponseBody`。header 缺失或未知值时省略 `authReason`，并通过 trace ID 查询 WebApi/ApplicationServices 审计日志。该可选 header 只帮助诊断，绝不改变 WebApi 的授权决定或 MCP tool 的稳定错误码。
 
 远程 HTTP 服务对每次下游业务 WebApi 请求写入一条 `mcp_webapi_request_completed`。事件包含 trace、method、normalized route、HTTP status、耗时；失败事件额外包含稳定错误码及 `webApiFailurePhase`。同时记录 `webApiRequestQuery`、`webApiRequestHeaders`、`webApiRequestBody`、`webApiResponseHeaders`、`webApiResponseBody`；`webApiRequestBodyBytes`、`webApiResponseBodyBytes`、`webApiRequestBodyTruncated`、`webApiResponseBodyTruncated` 和 `webApiResponseBodyState` 描述 payload 完整性。每个 body 快照最多 16 KiB UTF-8，并在强制脱敏后截断。对 `403`，`authReasonState=accepted` 表示已接受白名单原因，`missing` 表示未返回 header，`unrecognized` 表示返回值不在白名单。事件不记录原始未脱敏 header/query/body、host、userinfo、PAT、`Authorization`、session 或 PII。
@@ -395,7 +420,7 @@ WebApi `401` 与 `403` 不可合并：前者是认证问题，后者是 route/sc
 
 PAT 不属于 server runtime config。禁止以环境变量配置一个供所有客户共享的 PAT。
 
-远程 Streamable HTTP 入口将普通诊断日志写到 stderr，使用一行一个 JSON 对象。默认 `info` 输出服务启动、MCP 请求完成、已执行 tool 的完成记录，以及每次下游 WebApi 请求的详细完成事件；`debug` 追加 session 生命周期，`warn` / `error` 按严重级别过滤，只有显式 `silent` 完全关闭普通日志。对于失败的下游 WebApi tool 调用，摘要完成记录可包含 `webApiMethod`、`normalizedRoute`、`webApiStatus`、UUID `traceId` 和白名单 `authReason`。详细 `mcp_webapi_request_completed` 事件可包含脱敏后的 `webApiRequestHeaders`、`webApiRequestQuery`、request/response body 和 response headers；不得记录入站 header、未脱敏的 PAT、`Authorization`、Cookie、MCP 参数、session ID、完整 URL、原始 WebApi 正文、堆栈或 PII。
+远程 Streamable HTTP 入口将普通诊断日志写到 stderr，使用一行一个 JSON 对象。默认 `info` 输出服务启动、MCP 请求完成和已执行 tool 的完成记录；`debug` 追加 session 生命周期，`warn` / `error` 按严重级别过滤，只有显式 `silent` 完全关闭普通日志。对于失败的下游 WebApi tool 调用，完成记录还可包含 `webApiMethod`、`normalizedRoute`、`webApiStatus`、UUID `traceId` 和白名单 `authReason`。日志仅允许这些受控字段、事件名、HTTP method/status、JSON-RPC method、预定义 tool 名、稳定错误码、耗时和监听配置；不得记录入站 header、PAT、`Authorization`、MCP 参数、session ID、完整 URL/query、WebApi 正文、堆栈或 PII。
 
 `.env.example` 仅提供泛化的 sandbox 本地配置；开发者可在 Git 忽略的 `.env.local` 填入受控 WebApi 地址，并通过 `npm run dev:local` 或 `npm run start:local` 显式加载。`.env.local` 禁止包含 `TVCMALL_API_KEY` 或 PAT，原 `dev` / `start` 和生产部署不自动读取该文件。
 
