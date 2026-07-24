@@ -35,6 +35,57 @@ describe('runtime config', () => {
 
   it.each([
     undefined,
+    '   ',
+    'false',
+    'TRUE',
+    '1',
+    'yes'
+  ])('does not allow staging public HTTP for insecure WebApi HTTP value %s', (allowInsecureWebApiHttp) => {
+    expect(() => loadRuntimeConfig({
+      TVCMALL_API_ENV: 'staging',
+      TVCMALL_WEBAPI_BASE_URL: 'http://113.108.60.83:8084/api',
+      ...(allowInsecureWebApiHttp === undefined
+        ? {}
+        : { TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP: allowInsecureWebApiHttp })
+    })).toThrow('TVCMALL_WEBAPI_BASE_URL requires TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP=true for HTTP');
+  });
+
+  it.each(['production', 'staging', 'sandbox'])('allows public HTTP in %s only with the explicit insecure WebApi HTTP switch', (apiEnv) => {
+    expect(loadRuntimeConfig({
+      TVCMALL_API_ENV: apiEnv,
+      TVCMALL_WEBAPI_BASE_URL: 'http://113.108.60.83:8084/api',
+      TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP: 'true'
+    })).toMatchObject({
+      webApiBaseUrl: 'http://113.108.60.83:8084/api',
+      apiEnv,
+      allowInsecureWebApiHttp: true
+    });
+  });
+
+  it.each([
+    ['userinfo', 'http://mcp-user:top-secret@113.108.60.83:8084/api', 'mcp-user', 'top-secret'],
+    ['query parameters', 'http://113.108.60.83:8084/api?secret=query-value', 'query-value', undefined],
+    ['fragments', 'http://113.108.60.83:8084/api#secret-fragment', 'secret-fragment', undefined]
+  ])('keeps rejecting HTTP WebApi URL %s with the insecure switch without exposing sensitive values', (_description, webApiBaseUrl, sensitiveValue, additionalSensitiveValue) => {
+    let error: unknown;
+    try {
+      loadRuntimeConfig({
+        TVCMALL_API_ENV: 'staging',
+        TVCMALL_WEBAPI_BASE_URL: webApiBaseUrl,
+        TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP: 'true'
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).not.toContain(webApiBaseUrl);
+    expect(String(error)).not.toContain(sensitiveValue);
+    if (additionalSensitiveValue) expect(String(error)).not.toContain(additionalSensitiveValue);
+  });
+
+  it.each([
+    undefined,
     'invalid'
   ])('rejects private HTTP when the environment falls back to production: %s', (apiEnv) => {
     expect(() => loadRuntimeConfig({
@@ -134,8 +185,13 @@ describe('runtime config', () => {
       mcpPort: 3100,
       mcpPath: '/customer-mcp',
       apiAuthorization: 'login-api-authorization-example',
-      dataSource: 'real'
+      dataSource: 'real',
+      allowInsecureWebApiHttp: false
     });
+  });
+
+  it('defaults insecure WebApi HTTP to false', () => {
+    expect(DEFAULT_RUNTIME_CONFIG.allowInsecureWebApiHttp).toBe(false);
   });
 
   it('falls back to defaults for invalid numeric and enum values', () => {

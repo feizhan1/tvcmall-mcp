@@ -19,6 +19,7 @@ describe('createTvcMallClients', () => {
   it('uses fake clients by default', () => {
     const clients = createTvcMallClients({
       webApiBaseUrl: 'https://webapi.tvcmall.test',
+      allowInsecureWebApiHttp: false,
       apiTimeoutMs: 15000,
       apiEnv: 'production',
       logLevel: 'info',
@@ -40,6 +41,7 @@ describe('createTvcMallClients', () => {
   it('uses HTTP clients when TVCMall data source is real', () => {
     const clients = createTvcMallClients({
       webApiBaseUrl: 'https://webapi.tvcmall.test',
+      allowInsecureWebApiHttp: false,
       apiTimeoutMs: 4321,
       apiEnv: 'production',
       logLevel: 'info',

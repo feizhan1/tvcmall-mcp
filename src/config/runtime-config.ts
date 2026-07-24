@@ -10,6 +10,7 @@ const MAX_API_TIMEOUT_MS = 2_147_483_647;
 
 export interface TvcMallRuntimeConfig {
   webApiBaseUrl: string;
+  allowInsecureWebApiHttp: boolean;
   apiTimeoutMs: number;
   apiEnv: TvcMallApiEnv;
   logLevel: TvcMallLogLevel;
@@ -21,6 +22,7 @@ export interface TvcMallRuntimeConfig {
 }
 
 export const DEFAULT_RUNTIME_CONFIG = {
+  allowInsecureWebApiHttp: false,
   apiTimeoutMs: 15000,
   apiEnv: 'production',
   logLevel: 'info',
@@ -32,8 +34,10 @@ export const DEFAULT_RUNTIME_CONFIG = {
 
 export function loadRuntimeConfig(env: NodeJS.ProcessEnv = process.env): TvcMallRuntimeConfig {
   const apiEnv = readEnum(env.TVCMALL_API_ENV, API_ENV_VALUES) ?? DEFAULT_RUNTIME_CONFIG.apiEnv;
+  const allowInsecureWebApiHttp = readAllowInsecureWebApiHttp(env.TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP);
   return {
-    webApiBaseUrl: readWebApiBaseUrl(env.TVCMALL_WEBAPI_BASE_URL, apiEnv),
+    webApiBaseUrl: readWebApiBaseUrl(env.TVCMALL_WEBAPI_BASE_URL, apiEnv, allowInsecureWebApiHttp),
+    allowInsecureWebApiHttp,
     apiTimeoutMs: readApiTimeoutMs(env.TVCMALL_API_TIMEOUT_MS) ?? DEFAULT_RUNTIME_CONFIG.apiTimeoutMs,
     apiEnv,
     logLevel: readEnum(env.TVCMALL_LOG_LEVEL, LOG_LEVEL_VALUES) ?? DEFAULT_RUNTIME_CONFIG.logLevel,
@@ -70,7 +74,11 @@ function readMcpPath(value: string | undefined): string | undefined {
   return path.length > 1 ? path.replace(/\/+$/, '') : path;
 }
 
-function readWebApiBaseUrl(value: string | undefined, apiEnv: TvcMallApiEnv): string {
+function readAllowInsecureWebApiHttp(value: string | undefined): boolean {
+  return value?.trim() === 'true';
+}
+
+function readWebApiBaseUrl(value: string | undefined, apiEnv: TvcMallApiEnv, allowInsecureWebApiHttp: boolean): string {
   const url = readString(value);
   if (!url) throw new Error('TVCMALL_WEBAPI_BASE_URL must be explicitly configured');
 
@@ -88,8 +96,8 @@ function readWebApiBaseUrl(value: string | undefined, apiEnv: TvcMallApiEnv): st
     throw new Error('TVCMALL_WEBAPI_BASE_URL must not include userinfo');
   }
   if (parsed.protocol === 'https:') return url;
-  if (apiEnv === 'sandbox' && parsed.protocol === 'http:' && isSandboxHttpHost(parsed.hostname)) return url;
-  throw new Error('TVCMALL_WEBAPI_BASE_URL must use HTTPS unless sandbox targets loopback or RFC1918');
+  if (parsed.protocol === 'http:' && (allowInsecureWebApiHttp || (apiEnv === 'sandbox' && isSandboxHttpHost(parsed.hostname)))) return url;
+  throw new Error('TVCMALL_WEBAPI_BASE_URL requires TVCMALL_ALLOW_INSECURE_WEBAPI_HTTP=true for HTTP');
 }
 
 function isSandboxHttpHost(hostname: string): boolean {
