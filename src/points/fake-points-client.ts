@@ -21,12 +21,16 @@ export class FakePointsClient implements PointsClient {
   async listPointRecords(input: ListPointRecordsInput, _session: StoredAuthSession): Promise<ListPointRecordsResult> {
     const page = Math.max(1, input.page);
     const pageSize = Math.min(Math.max(1, input.page_size), 50);
+    const records = input.direction === 'all'
+      ? FIXTURE_POINT_RECORDS
+      : FIXTURE_POINT_RECORDS.filter((item) => item.type === (input.direction === 'got' ? 'earn' : 'use'));
     const start = (page - 1) * pageSize;
     return {
+      direction: input.direction,
       page,
       page_size: pageSize,
-      total: FIXTURE_POINT_RECORDS.length,
-      items: FIXTURE_POINT_RECORDS.slice(start, start + pageSize).map((item) => ({ ...item }))
+      total: records.length,
+      items: records.slice(start, start + pageSize).map((item) => ({ ...item }))
     };
   }
 }

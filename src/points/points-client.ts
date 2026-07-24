@@ -7,7 +7,10 @@ export interface PointsStat {
   total_used: number;
 }
 
+export type PointRecordsDirection = 'all' | 'got' | 'used';
+
 export interface ListPointRecordsInput {
+  direction: PointRecordsDirection;
   page: number;
   page_size: number;
 }
@@ -21,6 +24,7 @@ export interface PointRecord {
 }
 
 export interface ListPointRecordsResult {
+  direction: PointRecordsDirection;
   page: number;
   page_size: number;
   total: number;

@@ -55,7 +55,7 @@ describe('createTvcMallMcpServer', () => {
       tvcmall_search_products: '用于按关键词分页搜索商品；已知 product_id 并需要 SKU、价格、库存或属性详情时，使用 tvcmall_get_product_detail。',
       tvcmall_get_product_detail: '用于按 product_id 查询单个商品的 SKU、价格、库存和属性详情；需要按关键词查找商品时，使用 tvcmall_search_products。',
       tvcmall_get_points: '用于查询当前客户的积分汇总；需要逐笔积分获取和使用记录时，使用 tvcmall_list_point_records。',
-      tvcmall_list_point_records: '用于分页查询当前客户的积分获取和使用记录；需要积分汇总时，使用 tvcmall_get_points。',
+      tvcmall_list_point_records: '用于按方向分页查询当前客户的积分流水。direction：全部或未指定为 all；获得、获取积分为 got；使用、消耗积分为 used。需要积分汇总时，使用 tvcmall_get_points。',
       tvcmall_list_balance_records: '用于按 all、income 或 expense 分页查询当前客户的余额流水；积分查询请使用 tvcmall_get_points 或 tvcmall_list_point_records。',
       tvcmall_estimate_shipping: '用于按 sku、quantity 和 countrycode 预估未下单商品的运费；已有订单的物流、运费、shipping fee、freight 或 delivery cost 必须使用 tvcmall_get_tracking_info。',
       tvcmall_list_orders: '用于按日期和订单状态分页查询。根据用户意图设置 status：未指定或查询全部为 V3All；待付款为 V3Unpaid；待确认为 V3AwaitingConfirmation；备货中为 V3Preparing；已发货为 V3Shipped；已完成为 V3Done。已知 order_id 且需要商品、金额或收货信息时，使用 tvcmall_get_order_detail。',

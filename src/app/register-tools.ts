@@ -85,7 +85,7 @@ export function registerTvcMallTools(server: McpServer, dependencies: RegisterTo
 
   server.registerTool(
     'tvcmall_list_point_records',
-    { title: 'TVCMall List Point Records', description: '用于分页查询当前客户的积分获取和使用记录；需要积分汇总时，使用 tvcmall_get_points。', inputSchema: ListPointRecordsInputSchema, outputSchema: ListPointRecordsOutputSchema },
+    { title: 'TVCMall List Point Records', description: '用于按方向分页查询当前客户的积分流水。direction：全部或未指定为 all；获得、获取积分为 got；使用、消耗积分为 used。需要积分汇总时，使用 tvcmall_get_points。', inputSchema: ListPointRecordsInputSchema, outputSchema: ListPointRecordsOutputSchema },
     async (input) => handleToolCall('tvcmall_list_point_records', logger, () => listPointRecordsForMcp(input, { authContext, pointsClient }))
   );
 

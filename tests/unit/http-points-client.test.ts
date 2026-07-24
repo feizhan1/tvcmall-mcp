@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { HttpPointsClient } from '../../src/points/http-points-client.js';
 import type { StoredAuthSession } from '../../src/storage/token-store.js';
+import { ListPointRecordsInputSchema } from '../../src/tools/points.js';
 
 const session: StoredAuthSession = {
   customer: { id: 'cus_100', email: 'buyer@example.com' },
@@ -49,33 +50,33 @@ describe('HttpPointsClient', () => {
     });
   });
 
-  it('lists points records through the existing WebApi route using the same session PAT', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({
-      data: {
-        total: 1,
-        list: [
-          { id: 'pt_1', type: 'earn', points: 20, description: 'Order reward', createdAt: '2026-07-01T00:00:00Z' }
-        ]
-      }
-    }));
+  it.each([
+    ['all', '0'],
+    ['got', '1'],
+    ['used', '2']
+  ] as const)('maps direction %s to pointstype=%s', async (direction, pointstype) => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: { total: 0, list: [] } }));
     const client = new HttpPointsClient({ baseUrl: 'https://api.tvcmall.test', fetch: fetchMock });
+    const input = ListPointRecordsInputSchema.parse({ page: 3, page_size: 10, direction });
 
-    const result = await client.listPointRecords({ page: 3, page_size: 10 }, session);
+    await client.listPointRecords(input, session);
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const parsedUrl = new URL(url);
     expect(parsedUrl.origin + parsedUrl.pathname).toBe('https://api.tvcmall.test/v3/user/points/list');
-    expect(parsedUrl.searchParams.get('pageindex')).toBe('3');
-    expect(parsedUrl.searchParams.get('pagesize')).toBe('10');
+    expect(Object.fromEntries(parsedUrl.searchParams)).toEqual({ pageindex: '3', pagesize: '10', pointstype });
     expect(init.headers).toMatchObject({ Authorization: 'Bearer tmcp_v1_token-id.secret-value' });
-    expect(result).toEqual({
-      page: 3,
-      page_size: 10,
-      total: 1,
-      items: [
-        { id: 'pt_1', type: 'earn', points: 20, description: 'Order reward', created_at: '2026-07-01T00:00:00Z' }
-      ]
-    });
+  });
+
+  it('defaults an omitted direction to pointstype=0', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: { total: 0, list: [] } }));
+    const client = new HttpPointsClient({ baseUrl: 'https://api.tvcmall.test', fetch: fetchMock });
+    const input = ListPointRecordsInputSchema.parse({ page: 1, page_size: 20 });
+
+    await client.listPointRecords(input, session);
+
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(new URL(url).searchParams.get('pointstype')).toBe('0');
   });
 
   it('maps the real points stat response sample', async () => {
@@ -96,9 +97,9 @@ describe('HttpPointsClient', () => {
     const fetchMock = vi.fn(async () => sampleResponse('积分获取记录api.json'));
     const client = new HttpPointsClient({ baseUrl: 'https://api.tvcmall.test/', fetch: fetchMock });
 
-    const result = await client.listPointRecords({ page: 1, page_size: 20 }, session);
+    const result = await client.listPointRecords({ page: 1, page_size: 20, direction: 'all' }, session);
 
-    expect(result.total).toBe(3);
+    expect(result).toMatchObject({ direction: 'all', total: 3 });
     expect(result.items).toHaveLength(3);
     expect(result.items[0]).toEqual({
       id: '3786',

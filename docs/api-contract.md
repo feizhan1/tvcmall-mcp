@@ -246,7 +246,7 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 | `tvcmall_get_tracking_info` | `order_id` | 承运商、单号、状态、事件和可用的订单运费 | `order.read`；物流 route |
 | `tvcmall_batch_get_tracking` | `order_ids`（1..50） | 命中数量和物流摘要列表 | `order.read`；逐个调用物流 route |
 | `tvcmall_get_points` | `{}` | 可用/待生效/累计获得/累计使用积分 | `order.read`；积分汇总 route |
-| `tvcmall_list_point_records` | `page=1`、`page_size=20`（最大 50） | 分页、总数和积分记录摘要 | `order.read`；积分记录 route，投产前确认 allowlist |
+| `tvcmall_list_point_records` | `direction=all`、`page=1`、`page_size=20`（最大 50） | 方向、分页、总数和积分记录摘要 | `order.read`；积分记录 route，投产前确认 allowlist |
 | `tvcmall_list_balance_records` | `direction=all`、`page=1`、`page_size=20`（最大 50） | 筛选、分页、总数和余额流水摘要 | `order.read`；`GET /api/v3/user/balance/list` |
 
 ### 6.2 `tvcmall_auth_status`
@@ -343,10 +343,13 @@ route 未登记、`enabled=0` 或 PAT 缺少 required scope 均返回 `403`。MC
 
 ```json
 {
+  "direction": "all",
   "page": 1,
   "page_size": 20
 }
 ```
+
+`direction` 可为 `all`（默认，全部积分记录）、`got`（获得、获取积分）或 `used`（使用、消耗积分），分别映射为积分记录 WebApi 的 `pointstype=0`、`pointstype=1`、`pointstype=2`。
 
 积分 tool 只读；积分兑换、转余额或其他写操作不在 v0.1 范围。
 

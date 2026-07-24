@@ -15,6 +15,9 @@ export const PointsStatOutputSchema = z.object({
 });
 
 export const ListPointRecordsInputSchema = z.object({
+  direction: z.enum(['all', 'got', 'used']).default('all').describe(
+    '积分流水方向：全部或未指定为 all；获得、获取积分为 got；使用、消耗积分为 used。'
+  ),
   page: z.number().int().min(1).default(1),
   page_size: z.number().int().min(1).max(50).default(20)
 });
@@ -28,6 +31,7 @@ const PointRecordSchema = z.object({
 });
 
 export const ListPointRecordsOutputSchema = z.object({
+  direction: z.enum(['all', 'got', 'used']),
   page: z.number().int(),
   page_size: z.number().int(),
   total: z.number().int(),
@@ -35,7 +39,7 @@ export const ListPointRecordsOutputSchema = z.object({
 });
 
 export type GetPointsInput = z.infer<typeof GetPointsInputSchema>;
-export type ListPointRecordsInput = z.infer<typeof ListPointRecordsInputSchema>;
+export type ListPointRecordsInput = z.input<typeof ListPointRecordsInputSchema>;
 
 export interface PointsToolDependencies {
   authContext?: RequestAuthContext;
@@ -62,9 +66,10 @@ export async function listPointRecordsForMcp(input: ListPointRecordsInput, depen
   const parsedInput = ListPointRecordsInputSchema.parse(input);
   const pointsClient = dependencies.pointsClient ?? new FakePointsClient();
   const result = await pointsClient.listPointRecords(parsedInput, session);
+  const label = result.direction === 'got' ? '积分获取' : result.direction === 'used' ? '积分使用' : '积分';
 
   return {
-    content: [{ type: 'text', text: `找到 ${result.total} 条积分记录，当前返回 ${result.items.length} 条。` }],
+    content: [{ type: 'text', text: `找到 ${result.total} 条${label}记录，当前返回 ${result.items.length} 条。` }],
     structuredContent: { ...result }
   };
 }

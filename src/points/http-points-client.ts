@@ -1,6 +1,12 @@
 import { BaseHttpClient, firstArray, firstObject, readInteger, readString, unwrapPayload, type HttpClientOptions, type JsonObject } from '../api/http-client.js';
 import type { StoredAuthSession } from '../storage/token-store.js';
-import type { ListPointRecordsInput, ListPointRecordsResult, PointRecord, PointsClient, PointsStat } from './points-client.js';
+import type { ListPointRecordsInput, ListPointRecordsResult, PointRecord, PointRecordsDirection, PointsClient, PointsStat } from './points-client.js';
+
+const POINTS_TYPE_BY_DIRECTION: Record<PointRecordsDirection, string> = {
+  all: '0',
+  got: '1',
+  used: '2'
+};
 
 export class HttpPointsClient extends BaseHttpClient implements PointsClient {
   constructor(options: HttpClientOptions) {
@@ -28,7 +34,8 @@ export class HttpPointsClient extends BaseHttpClient implements PointsClient {
   async listPointRecords(input: ListPointRecordsInput, session: StoredAuthSession): Promise<ListPointRecordsResult> {
     const response = await this.fetchImpl(this.createUrl('/v3/user/points/list', {
       pageindex: String(input.page),
-      pagesize: String(input.page_size)
+      pagesize: String(input.page_size),
+      pointstype: POINTS_TYPE_BY_DIRECTION[input.direction]
     }), {
       method: 'GET',
       headers: this.authHeaders(session)
@@ -37,8 +44,7 @@ export class HttpPointsClient extends BaseHttpClient implements PointsClient {
     const items = firstArray(payload, ['items', 'list', 'records', 'points']).map(mapPointRecord);
 
     return {
-      page: input.page,
-      page_size: input.page_size,
+      ...input,
       total: readInteger(payload, ['total', 'totalCount', 'count'], items.length),
       items
     };
