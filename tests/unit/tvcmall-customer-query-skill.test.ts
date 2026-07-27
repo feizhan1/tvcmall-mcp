@@ -1,14 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const skill = readFileSync(
-  '.agents/skills/query-tvcmall-customer-data/SKILL.md',
-  'utf8'
-);
+const SKILL_DIRECTORY = '.agents/skills/query-tvcmall-customer-data';
+const skill = readFileSync(`${SKILL_DIRECTORY}/SKILL.md`, 'utf8');
 const openAiYaml = readFileSync(
-  '.agents/skills/query-tvcmall-customer-data/agents/openai.yaml',
+  `${SKILL_DIRECTORY}/agents/openai.yaml`,
   'utf8'
 );
+const registerToolsSource = readFileSync('src/app/register-tools.ts', 'utf8');
 
 type OpenAiMetadata = {
   displayName: string;
@@ -23,11 +23,39 @@ type OpenAiMetadata = {
 };
 
 type StringMap = Record<string, string>;
+type SkillDirectoryFiles = Record<string, string>;
 
 const INTERFACE_KEYS = ['display_name', 'short_description', 'default_prompt'] as const;
 const DEPENDENCY_KEYS = ['type', 'value', 'description', 'transport'] as const;
 // This matches the server's PAT body pattern without anchors for document scanning.
 const PAT_VALUE_PATTERN = /tmcp_v1_[^\s.]+\.[^\s.]+/;
+
+const comparePaths = (left: string, right: string) =>
+  left < right ? -1 : left > right ? 1 : 0;
+
+const readSkillDirectoryFiles = (directory: string): SkillDirectoryFiles => {
+  const files: SkillDirectoryFiles = {};
+  const visit = (absolutePath: string, relativePath: string) => {
+    const entries = readdirSync(absolutePath, { withFileTypes: true })
+      .sort((left, right) => comparePaths(left.name, right.name));
+
+    for (const entry of entries) {
+      const nextRelativePath = relativePath
+        ? `${relativePath}/${entry.name}`
+        : entry.name;
+      const nextAbsolutePath = join(absolutePath, entry.name);
+
+      if (entry.isDirectory()) {
+        visit(nextAbsolutePath, nextRelativePath);
+      } else if (entry.isFile()) {
+        files[nextRelativePath] = readFileSync(nextAbsolutePath, 'utf8');
+      }
+    }
+  };
+
+  visit(directory, '');
+  return Object.fromEntries(Object.entries(files).sort(([left], [right]) => comparePaths(left, right)));
+};
 
 const parseQuotedEntry = (entry: string, scope: string) => {
   const separator = entry.indexOf(': "');
@@ -180,6 +208,16 @@ const assertNoUnsafeSkillDirectoryValue = (source: string) => {
   }
 };
 
+const requireSkillDirectoryFile = (files: SkillDirectoryFiles, path: string) => {
+  const source = files[path];
+
+  if (source === undefined) {
+    throw new Error(`Skill directory must contain ${path}`);
+  }
+
+  return source;
+};
+
 const assertOpenAiMetadataContract = (source: string) => {
   const metadata = parseOpenAiMetadata(source);
 
@@ -223,9 +261,83 @@ const assertOpenAiMetadataContract = (source: string) => {
   );
 };
 
-const assertSkillDirectoryContract = (skillSource: string, metadataSource: string) => {
+const assertSkillDirectoryFilesContract = (files: SkillDirectoryFiles) => {
+  const skillSource = requireSkillDirectoryFile(files, 'SKILL.md');
+  const metadataSource = requireSkillDirectoryFile(files, 'agents/openai.yaml');
+
   assertOpenAiMetadataContract(metadataSource);
-  assertNoUnsafeSkillDirectoryValue(`${skillSource}\n${metadataSource}`);
+  assertNoUnsafeSkillDirectoryValue(
+    Object.entries(files)
+      .sort(([left], [right]) => comparePaths(left, right))
+      .map(([path, source]) => `${path}\n${source}`)
+      .join('\n')
+  );
+};
+
+const assertSkillDirectoryContract = (skillSource: string, metadataSource: string) =>
+  assertSkillDirectoryFilesContract({
+    'SKILL.md': skillSource,
+    'agents/openai.yaml': metadataSource
+  });
+
+const registeredToolNames = (source: string) => {
+  const names = Array.from(
+    source.matchAll(/\bserver\.registerTool\(\s*'(?<name>tvcmall_[a-z_]+)'/g),
+    (match) => match.groups?.name
+  );
+
+  if (names.length === 0 || names.some((name) => name === undefined)) {
+    throw new Error('register-tools.ts must register at least one tvcmall tool');
+  }
+
+  return names as string[];
+};
+
+const routeTableToolNames = (markdown: string) => {
+  const lines = markdown.split('\n');
+  const headerIndex = lines.indexOf('| 意图 | Tool | 约束 |');
+
+  if (headerIndex === -1 || !/^\|\s*---\s*\|\s*---\s*\|\s*---\s*\|$/.test(lines[headerIndex + 1] ?? '')) {
+    throw new Error('Skill must contain the routing table header and separator');
+  }
+
+  const names: string[] = [];
+  for (let index = headerIndex + 2; lines[index]?.startsWith('|'); index += 1) {
+    const cells = lines[index].split('|').slice(1, -1).map((cell) => cell.trim());
+    const tool = /^`(tvcmall_[a-z_]+)`$/.exec(cells[1] ?? '')?.[1];
+
+    if (cells.length !== 3 || !tool) {
+      throw new Error('routing table data rows must contain one tvcmall tool');
+    }
+    names.push(tool);
+  }
+
+  return names;
+};
+
+const assertRegisteredToolRouteContract = (markdown: string, registrationSource: string) => {
+  const registered = new Set(registeredToolNames(registrationSource));
+  const routed = routeTableToolNames(markdown);
+  const routeCounts = new Map<string, number>();
+
+  for (const tool of routed) {
+    routeCounts.set(tool, (routeCounts.get(tool) ?? 0) + 1);
+  }
+  for (const [tool, count] of routeCounts) {
+    if (count !== 1) {
+      throw new Error(`routing table must list registered tool "${tool}" exactly once`);
+    }
+  }
+  for (const tool of routeCounts.keys()) {
+    if (!registered.has(tool)) {
+      throw new Error(`routing table must not include unregistered tool "${tool}"`);
+    }
+  }
+  for (const tool of registered) {
+    if (!routeCounts.has(tool)) {
+      throw new Error(`routing table must include registered tool "${tool}"`);
+    }
+  }
 };
 
 const routeTableRow = (markdown: string, tool: string) => {
@@ -498,5 +610,62 @@ describe('TVCMall Customer Query Skill contract', () => {
         )
       )
     ).toThrow('tvcmall_list_balance_records route must not include direction "got"');
+  });
+
+  it('v3: keeps the Skill routing table exactly aligned with registered tools', () => {
+    expect(() => assertRegisteredToolRouteContract(skill, registerToolsSource)).not.toThrow();
+  });
+
+  it('v3: rejects a missing registered tool from the Skill routing table', () => {
+    const pointsRoute = routeTableRow(skill, 'tvcmall_get_points');
+
+    expect(() =>
+      assertRegisteredToolRouteContract(
+        skill.replace(`${pointsRoute}\n`, ''),
+        registerToolsSource
+      )
+    ).toThrow('routing table must include registered tool "tvcmall_get_points"');
+  });
+
+  it('v3: rejects an unregistered tool from the Skill routing table', () => {
+    const balanceRoute = routeTableRow(skill, 'tvcmall_list_balance_records');
+    const unknownRoute = '| 未注册工具 | `tvcmall_unregistered_tool` | 不应存在 |';
+
+    expect(() =>
+      assertRegisteredToolRouteContract(
+        skill.replace(balanceRoute, `${balanceRoute}\n${unknownRoute}`),
+        registerToolsSource
+      )
+    ).toThrow('routing table must not include unregistered tool "tvcmall_unregistered_tool"');
+  });
+
+  it('v3: rejects a duplicate registered tool in the Skill routing table', () => {
+    const pointsRoute = routeTableRow(skill, 'tvcmall_get_points');
+
+    expect(() =>
+      assertRegisteredToolRouteContract(
+        skill.replace(pointsRoute, `${pointsRoute}\n${pointsRoute}`),
+        registerToolsSource
+      )
+    ).toThrow('routing table must list registered tool "tvcmall_get_points" exactly once');
+  });
+
+  it('v3: recursively reads all regular files in the actual Skill directory', () => {
+    const files = readSkillDirectoryFiles(SKILL_DIRECTORY);
+
+    expect(files).toHaveProperty('SKILL.md', skill);
+    expect(files).toHaveProperty('agents/openai.yaml', openAiYaml);
+    expect(() => assertSkillDirectoryFilesContract(files)).not.toThrow();
+  });
+
+  it('v3: rejects unsafe values in an in-memory nested Skill resource', () => {
+    const unsafeFiles = {
+      ...readSkillDirectoryFiles(SKILL_DIRECTORY),
+      'references/unsafe.md': ['tmcp_v1_', '_token', '.', 'secret'].join('')
+    };
+
+    expect(() => assertSkillDirectoryFilesContract(unsafeFiles)).toThrow(
+      'Skill directory must not contain a credential value'
+    );
   });
 });

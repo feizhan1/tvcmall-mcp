@@ -237,7 +237,7 @@ Run:
 npm test -- tests/unit/tvcmall-customer-query-skill.test.ts
 ```
 
-Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品当前 `items` 唯一性、已发货订单物流、对话凭据、认证状态、严格 MCP metadata 结构，以及积分和余额的完整允许方向集合；metadata 契约只允许当前的顶层、嵌套 key 和唯一 MCP dependency。安全断言扫描整个 Skill 目录的组合内容，拒绝重复/未知 key、额外嵌套、URL、Bearer 实值、邮箱/电话/地址 PII，以及与服务器 `^tmcp_v1_[^\s.]+\.[^\s.]+$` 等价的 PAT 实值（包含 `_` 或 `-` 开头 token ID）。积分仅允许 `all`/`got`/`used`，余额仅允许 `all`/`income`/`expense`；对受控内存副本中的 metadata 删除/替换、重复 key、敏感 key、交叉方向或 `got`/`expense` 互换明确失败，且不改写磁盘文件。
+Expected: 读取实际 `SKILL.md`、`agents/openai.yaml` 和 `src/app/register-tools.ts`，覆盖商品当前 `items` 唯一性、已发货订单物流、对话凭据、认证状态、严格 MCP metadata 结构，以及积分和余额的完整允许方向集合；从真实 `server.registerTool` 调用提取 tool 集合，并与 Skill 路由表数据行精确双向比对，且每个 tool 恰好一行。安全断言按稳定路径顺序递归扫描整个 Skill 目录的常规文件，拒绝重复/未知 key、额外嵌套、URL、Bearer 实值、邮箱/电话/地址 PII，以及与服务器 `^tmcp_v1_[^\s.]+\.[^\s.]+$` 等价的 PAT 实值（包含 `_` 或 `-` 开头 token ID）。积分仅允许 `all`/`got`/`used`，余额仅允许 `all`/`income`/`expense`；对受控内存副本中的 metadata 删除/替换、重复 key、敏感 key、交叉方向、缺失/未知/重复 route 或嵌套资源中的敏感值明确失败，且不改写磁盘文件。
 
 ### Task 4: 静态安全、元数据与路由一致性验证
 
@@ -246,44 +246,27 @@ Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品当前 
 - Verify: `.agents/skills/query-tvcmall-customer-data/agents/openai.yaml`
 - Verify: `tests/unit/tvcmall-customer-query-skill.test.ts`
 
-静态契约测试按官方生成器当前固定形态严格解析 `openai.yaml`：仅允许 `interface`/`dependencies` 顶层、interface 的三个字段和唯一工具项的四个字段，并验证 display name、Unicode 短描述长度、默认提示、唯一 `tvcmall` Streamable HTTP MCP dependency、重复/未知 key 和额外嵌套；安全扫描对 `SKILL.md` 与 `openai.yaml` 的组合内容执行，PAT 格式与服务器 `^tmcp_v1_[^\s.]+\.[^\s.]+$` 等价，不接受 URL、凭据实值或邮箱/电话/地址 PII；积分与余额方向只在各自 Markdown 路由表行中检查完整允许集合。
+静态契约测试按官方生成器当前固定形态严格解析 `openai.yaml`：仅允许 `interface`/`dependencies` 顶层、interface 的三个字段和唯一工具项的四个字段，并验证 display name、Unicode 短描述长度、默认提示、唯一 `tvcmall` Streamable HTTP MCP dependency、重复/未知 key 和额外嵌套；从 `register-tools.ts` 的实际 `server.registerTool` 调用提取集合，仅解析 Skill 路由表数据行并要求双向完全一致、每项恰好一行；安全扫描按稳定路径顺序递归读取整个 Skill 目录的常规文件，PAT 格式与服务器 `^tmcp_v1_[^\s.]+\.[^\s.]+$` 等价，不接受 URL、凭据实值或邮箱/电话/地址 PII；积分与余额方向只在各自 Markdown 路由表行中检查完整允许集合。
 
-- [ ] **Step 1: 校验全部 tool 名称存在**
-
-Run:
-
-```bash
-for tool in \
-  tvcmall_auth_status \
-  tvcmall_search_products \
-  tvcmall_get_product_detail \
-  tvcmall_estimate_shipping \
-  tvcmall_list_orders \
-  tvcmall_get_order_detail \
-  tvcmall_get_tracking_info \
-  tvcmall_batch_get_tracking \
-  tvcmall_get_points \
-  tvcmall_list_point_records \
-  tvcmall_list_balance_records; do
-  rg -q "$tool" .agents/skills/query-tvcmall-customer-data/SKILL.md || exit 1
-done
-```
-
-Expected: exit `0`。
-
-- [ ] **Step 2: 校验 Skill 与实际注册 tool 一致**
+- [ ] **Step 1: 自动精确校验路由表与实际注册 tool**
 
 Run:
 
 ```bash
-rg -o "tvcmall_[a-z_]+" .agents/skills/query-tvcmall-customer-data/SKILL.md \
-  | sort -u
-rg -o "'tvcmall_[a-z_]+'" src/app/register-tools.ts \
-  | tr -d "'" \
-  | sort -u
+npm test -- tests/unit/tvcmall-customer-query-skill.test.ts
 ```
 
-Expected: 两组名称均为当前 11 个只读 tools，没有拼写错误或不存在的 tool。
+Expected: 测试从 `src/app/register-tools.ts` 中的真实 `server.registerTool` 调用提取 tool 名称，只解析 `SKILL.md` 路由表的数据行；两者集合精确相等，每个注册 tool 在路由表中恰好一行。内存副本删除合法行、加入未注册行或重复合法行均明确失败。
+
+- [ ] **Step 2: 自动递归校验整个 Skill 目录**
+
+Run:
+
+```bash
+npm test -- tests/unit/tvcmall-customer-query-skill.test.ts
+```
+
+Expected: 测试递归读取目标 Skill 目录全部常规文件并按相对路径稳定排序，对组合内容执行安全校验；内存中的 `references/unsafe.md` 出现服务器兼容 PAT 格式时明确失败，确保未来 resources、scripts 和 assets 都不会绕过扫描。
 
 - [ ] **Step 3: 扫描敏感值与虚构连接信息**
 
@@ -326,7 +309,7 @@ git status --short
 git diff --stat HEAD~1
 ```
 
-Expected: 无空白错误；Skill 实现提交只涉及目标 Skill 的两个文件，若 GREEN 阶段发生最小修订则只额外修改 `SKILL.md`。
+Expected: 无空白错误；Skill 实现提交只涉及目标 Skill、静态契约测试和同步实施计划，不修改 MCP 服务端代码。
 
 - [ ] **Step 2: 如 GREEN 阶段修订了 Skill，提交修订**
 
