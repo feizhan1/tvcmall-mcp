@@ -658,14 +658,61 @@ describe('TVCMall Customer Query Skill contract', () => {
     expect(() => assertSkillDirectoryFilesContract(files)).not.toThrow();
   });
 
-  it('v3: rejects unsafe values in an in-memory nested Skill resource', () => {
-    const unsafeFiles = {
-      ...readSkillDirectoryFiles(SKILL_DIRECTORY),
-      'references/unsafe.md': ['tmcp_v1_', '_token', '.', 'secret'].join('')
-    };
-
-    expect(() => assertSkillDirectoryFilesContract(unsafeFiles)).toThrow(
+  const nestedUnsafeResourceCases = [
+    [
+      'PAT',
+      ['tmcp_v1_', '_token', '.', 'secret'].join(''),
       'Skill directory must not contain a credential value'
-    );
+    ],
+    [
+      'URL',
+      ['https', '://', 'unreviewed.example'].join(''),
+      'Skill directory must not contain a URL'
+    ],
+    [
+      'Bearer',
+      ['Bearer', ' ', 'demo_value'].join(''),
+      'Skill directory must not contain a credential value'
+    ],
+    [
+      'email',
+      ['user', '@', 'example.test'].join(''),
+      'Skill directory must not contain PII'
+    ],
+    [
+      'phone',
+      ['+86', ' ', '138', ' ', '0013', ' ', '8000'].join(''),
+      'Skill directory must not contain PII'
+    ],
+    [
+      'address',
+      ['地址', '：', '虚构测试街道 1 号'].join(''),
+      'Skill directory must not contain PII'
+    ]
+  ] as const;
+
+  it('v4: covers every sensitive value category in nested Skill resources', () => {
+    expect(nestedUnsafeResourceCases.map(([category]) => category)).toEqual([
+      'PAT',
+      'URL',
+      'Bearer',
+      'email',
+      'phone',
+      'address'
+    ]);
   });
+
+  it.each(nestedUnsafeResourceCases)(
+    'v4: rejects a nested Skill resource containing %s',
+    (_category, unsafeValue, expectedError) => {
+      const unsafeFiles = {
+        ...readSkillDirectoryFiles(SKILL_DIRECTORY),
+        'references/unsafe.md': unsafeValue
+      };
+
+      expect(() => assertSkillDirectoryFilesContract(unsafeFiles)).toThrow(
+        expectedError
+      );
+    }
+  );
 });

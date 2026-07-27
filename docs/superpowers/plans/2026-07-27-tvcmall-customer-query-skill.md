@@ -237,7 +237,7 @@ Run:
 npm test -- tests/unit/tvcmall-customer-query-skill.test.ts
 ```
 
-Expected: 读取实际 `SKILL.md`、`agents/openai.yaml` 和 `src/app/register-tools.ts`，覆盖商品当前 `items` 唯一性、已发货订单物流、对话凭据、认证状态、严格 MCP metadata 结构，以及积分和余额的完整允许方向集合；从真实 `server.registerTool` 调用提取 tool 集合，并与 Skill 路由表数据行精确双向比对，且每个 tool 恰好一行。安全断言按稳定路径顺序递归扫描整个 Skill 目录的常规文件，拒绝重复/未知 key、额外嵌套、URL、Bearer 实值、邮箱/电话/地址 PII，以及与服务器 `^tmcp_v1_[^\s.]+\.[^\s.]+$` 等价的 PAT 实值（包含 `_` 或 `-` 开头 token ID）。积分仅允许 `all`/`got`/`used`，余额仅允许 `all`/`income`/`expense`；对受控内存副本中的 metadata 删除/替换、重复 key、敏感 key、交叉方向、缺失/未知/重复 route 或嵌套资源中的敏感值明确失败，且不改写磁盘文件。
+Expected: 读取实际 `SKILL.md`、`agents/openai.yaml` 和 `src/app/register-tools.ts`，覆盖商品当前 `items` 唯一性、已发货订单物流、对话凭据、认证状态、严格 MCP metadata 结构，以及积分和余额的完整允许方向集合；从真实 `server.registerTool` 调用提取 tool 集合，并与 Skill 路由表数据行精确双向比对，且每个 tool 恰好一行。安全断言按稳定路径顺序递归扫描整个 Skill 目录的常规文件，拒绝重复/未知 key、额外嵌套、URL、Bearer 实值、邮箱/电话/地址 PII，以及与服务器 `^tmcp_v1_[^\s.]+\.[^\s.]+$` 等价的 PAT 实值（包含 `_` 或 `-` 开头 token ID）。积分仅允许 `all`/`got`/`used`，余额仅允许 `all`/`income`/`expense`；对受控内存副本中的 metadata 删除/替换、重复 key、敏感 key、交叉方向、缺失/未知/重复 route，以及虚拟嵌套 `references/unsafe.md` 中逐项注入 URL、PAT、Bearer、邮箱、电话和地址 PII 明确失败，且不改写磁盘文件。
 
 ### Task 4: 静态安全、元数据与路由一致性验证
 
@@ -266,7 +266,7 @@ Run:
 npm test -- tests/unit/tvcmall-customer-query-skill.test.ts
 ```
 
-Expected: 测试递归读取目标 Skill 目录全部常规文件并按相对路径稳定排序，对组合内容执行安全校验；内存中的 `references/unsafe.md` 出现服务器兼容 PAT 格式时明确失败，确保未来 resources、scripts 和 assets 都不会绕过扫描。
+Expected: 测试递归读取目标 Skill 目录全部常规文件并按相对路径稳定排序，对组合内容执行安全校验；内存中的 `references/unsafe.md` 分别出现服务器兼容 PAT、URL、Bearer 实值、邮箱、电话或地址 PII 时均明确失败，确保未来 resources、scripts 和 assets 都不会绕过扫描。
 
 - [ ] **Step 3: 扫描敏感值与虚构连接信息**
 
