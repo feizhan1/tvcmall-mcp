@@ -199,6 +199,7 @@ Expected: commit 只包含 `SKILL.md` 和 `agents/openai.yaml`。
 **Files:**
 - Test: `.agents/skills/query-tvcmall-customer-data/SKILL.md`
 - Test: `.agents/skills/query-tvcmall-customer-data/agents/openai.yaml`
+- Test: `tests/unit/tvcmall-customer-query-skill.test.ts`
 
 - [ ] **Step 1: 在新 Agent 中运行商品唯一性场景**
 
@@ -228,12 +229,24 @@ Expected: 分别选择 `tvcmall_list_point_records(direction=got)`、`tvcmall_li
 
 如果任一场景失败，只在 `SKILL.md` 对应章节增加该场景暴露的最小明确规则，然后从 Step 1 开始重跑全部三个场景，直到全部通过。
 
-### Task 4: 静态安全与一致性验证
+- [ ] **Step 5: 运行静态 Skill 契约回归**
+
+Run:
+
+```bash
+npm test -- tests/unit/tvcmall-customer-query-skill.test.ts
+```
+
+Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品 total、已发货订单物流、对话凭据、认证状态、MCP metadata，以及积分 `got` 和余额 `expense` 路由；对受控内存副本中的 metadata 删除/替换或 `got`/`expense` 互换明确失败，且不改写磁盘文件。
+
+### Task 4: 静态安全、元数据与路由一致性验证
 
 **Files:**
 - Verify: `.agents/skills/query-tvcmall-customer-data/SKILL.md`
 - Verify: `.agents/skills/query-tvcmall-customer-data/agents/openai.yaml`
 - Verify: `tests/unit/tvcmall-customer-query-skill.test.ts`
+
+静态契约测试验证 `openai.yaml` 的 display name、Unicode 短描述长度、默认提示、唯一 `tvcmall` Streamable HTTP MCP dependency 和敏感字段缺失；积分与余额方向只在各自 Markdown 路由表行中检查。
 
 - [ ] **Step 1: 校验全部 tool 名称存在**
 
@@ -301,6 +314,7 @@ Expected: `Skill is valid!`
 **Files:**
 - Verify: `.agents/skills/query-tvcmall-customer-data/SKILL.md`
 - Verify: `.agents/skills/query-tvcmall-customer-data/agents/openai.yaml`
+- Verify: `tests/unit/tvcmall-customer-query-skill.test.ts`
 
 - [ ] **Step 1: 检查格式和变更范围**
 
