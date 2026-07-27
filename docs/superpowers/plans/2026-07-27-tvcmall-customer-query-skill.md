@@ -88,7 +88,7 @@ python3 /Users/feizhan/.codex/skills/.system/skill-creator/scripts/init_skill.py
   query-tvcmall-customer-data \
   --path .agents/skills \
   --interface 'display_name=TVCMall 客户查询' \
-  --interface 'short_description=安全查询商品、订单、物流、运费、积分和余额流水' \
+  --interface 'short_description=安全查询 TVCMall 商品、订单、物流、运费、积分和余额流水' \
   --interface 'default_prompt=使用 $query-tvcmall-customer-data 查询我的 TVCMall 订单和物流状态。'
 ```
 
@@ -159,7 +159,7 @@ description: Use when users ask to search TVCMall products, estimate shipping fo
 ```yaml
 interface:
   display_name: "TVCMall 客户查询"
-  short_description: "安全查询商品、订单、物流、运费、积分和余额流水"
+  short_description: "安全查询 TVCMall 商品、订单、物流、运费、积分和余额流水"
   default_prompt: "使用 $query-tvcmall-customer-data 查询我的 TVCMall 订单和物流状态。"
 
 dependencies:
