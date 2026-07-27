@@ -26,6 +26,8 @@ type StringMap = Record<string, string>;
 
 const INTERFACE_KEYS = ['display_name', 'short_description', 'default_prompt'] as const;
 const DEPENDENCY_KEYS = ['type', 'value', 'description', 'transport'] as const;
+// This matches the server's PAT body pattern without anchors for document scanning.
+const PAT_VALUE_PATTERN = /tmcp_v1_[^\s.]+\.[^\s.]+/;
 
 const parseQuotedEntry = (entry: string, scope: string) => {
   const separator = entry.indexOf(': "');
@@ -162,15 +164,24 @@ const requireEqual = (actual: string, expected: string, error: string) => {
   }
 };
 
+const assertNoUnsafeSkillDirectoryValue = (source: string) => {
+  if (/https?:\/\//i.test(source)) {
+    throw new Error('Skill directory must not contain a URL');
+  }
+  if (/\bBearer[ \t]+\S+/i.test(source) || PAT_VALUE_PATTERN.test(source)) {
+    throw new Error('Skill directory must not contain a credential value');
+  }
+  if (
+    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(source) ||
+    /(?:\+?\d[\d\s-]{6,}\d)/.test(source) ||
+    /(?:地址|address)\s*[:：]\s*\S+/i.test(source)
+  ) {
+    throw new Error('Skill directory must not contain PII');
+  }
+};
+
 const assertOpenAiMetadataContract = (source: string) => {
   const metadata = parseOpenAiMetadata(source);
-
-  if (/https?:\/\//i.test(source)) {
-    throw new Error('openai.yaml must not declare a URL');
-  }
-  if (/\bPAT\b|\bBearer\s+\S+|\btmcp_v1_[A-Za-z0-9]/i.test(source)) {
-    throw new Error('openai.yaml must not contain a credential value');
-  }
 
   requireEqual(
     metadata.displayName,
@@ -210,6 +221,11 @@ const assertOpenAiMetadataContract = (source: string) => {
     '由 MCP Client 配置的 TVCMall Customer MCP',
     'openai.yaml dependency.description must describe the configured TVCMall MCP'
   );
+};
+
+const assertSkillDirectoryContract = (skillSource: string, metadataSource: string) => {
+  assertOpenAiMetadataContract(metadataSource);
+  assertNoUnsafeSkillDirectoryValue(`${skillSource}\n${metadataSource}`);
 };
 
 const routeTableRow = (markdown: string, tool: string) => {
@@ -263,12 +279,11 @@ const assertAccountRouteContract = (markdown: string) => {
 
 const scenarios = [
   {
-    version: 'v1',
-    name: '商品结果唯一性',
+    version: 'v2',
+    name: '当前商品结果唯一性',
     expectedConstraints: {
-      uniqueTotal: 'total === 1',
-      multipleTotal: 'total > 1',
-      currentPageItems: 'items'
+      uniqueCurrentItems: '当前 `items` 只有一项',
+      multipleCurrentItems: '当前 `items` 多项'
     }
   },
   {
@@ -304,19 +319,16 @@ const sectionAfter = (heading: string) => {
 };
 
 describe('TVCMall Customer Query Skill contract', () => {
-  it(`${scenarios[0].version}: ${scenarios[0].name} only retrieves detail for a globally unique result`, () => {
-    const { uniqueTotal, multipleTotal, currentPageItems } =
+  it(`${scenarios[0].version}: ${scenarios[0].name} only retrieves detail when the current items contain one result`, () => {
+    const { uniqueCurrentItems, multipleCurrentItems } =
       scenarios[0].expectedConstraints;
     const productDecision = paragraphContaining('商品搜索无结果时停止');
 
-    expect(productDecision).toContain(uniqueTotal);
-    expect(productDecision).toMatch(/total\s*={3}\s*1[\s\S]*详情/);
-    expect(productDecision).toContain(multipleTotal);
-    expect(productDecision).toMatch(
-      new RegExp(
-        `${multipleTotal.replace('>', '\\>')}[\\s\\S]*${currentPageItems}[\\s\\S]*确认[\\s\\S]*(?:自行)[\\s\\S]*详情`
-      )
-    );
+    expect(productDecision).toContain(uniqueCurrentItems);
+    expect(productDecision).toMatch(/当前\s*`items`\s*只有一项[\s\S]*用户需要详情/);
+    expect(productDecision).toContain(multipleCurrentItems);
+    expect(productDecision).toMatch(/当前\s*`items`\s*多项[\s\S]*确认[\s\S]*(?:不能|不要)[\s\S]*自行/);
+    expect(productDecision).not.toMatch(/\btotal\b/);
   });
 
   it(`${scenarios[1].version}: ${scenarios[1].name} sequences tracking after shipped orders and excludes product shipping estimates`, () => {
@@ -355,7 +367,7 @@ describe('TVCMall Customer Query Skill contract', () => {
   });
 
   it('v1: validates generated MCP metadata and rejects unsafe in-memory metadata changes', () => {
-    expect(() => assertOpenAiMetadataContract(openAiYaml)).not.toThrow();
+    expect(() => assertSkillDirectoryContract(skill, openAiYaml)).not.toThrow();
     expect(() =>
       assertOpenAiMetadataContract(
         openAiYaml.replace('display_name: "TVCMall 客户查询"', 'display_name: "错误名称"')
@@ -412,6 +424,32 @@ describe('TVCMall Customer Query Skill contract', () => {
         )
       )
     ).toThrow('openai.yaml interface contains unknown key "api_key"');
+  });
+
+  it.each([
+    [
+      'a PAT whose token ID begins with an underscore',
+      ['tmcp_v1_', '_token', '.', 'secret'].join(''),
+      'Skill directory must not contain a credential value'
+    ],
+    [
+      'a PAT whose token ID begins with a hyphen',
+      ['tmcp_v1_', '-token', '.', 'secret'].join(''),
+      'Skill directory must not contain a credential value'
+    ],
+    [
+      'a Bearer credential',
+      ['Bearer', ' ', 'demo_value'].join(''),
+      'Skill directory must not contain a credential value'
+    ],
+    ['a URL', ['https', '://', 'unreviewed.example'].join(''), 'Skill directory must not contain a URL'],
+    ['an email address', ['user', '@', 'example.test'].join(''), 'Skill directory must not contain PII'],
+    ['a phone number', ['+86', ' ', '138', ' ', '0013', ' ', '8000'].join(''), 'Skill directory must not contain PII'],
+    ['a physical address', ['地址', '：', '虚构测试街道 1 号'].join(''), 'Skill directory must not contain PII']
+  ])('v2: rejects %s anywhere in the Skill directory', (_name, unsafeValue, expectedError) => {
+    expect(() => assertSkillDirectoryContract(`${skill}\n${unsafeValue}`, openAiYaml)).toThrow(
+      expectedError
+    );
   });
 
   it('v1: keeps points and balance directions on their own routing table rows', () => {

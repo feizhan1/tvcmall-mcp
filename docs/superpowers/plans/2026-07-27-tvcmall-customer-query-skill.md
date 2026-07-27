@@ -132,7 +132,7 @@ description: Use when users ask to search TVCMall products, estimate shipping fo
 | 积分流水 | `tvcmall_list_point_records` | `direction` 使用 `all`、`got` 或 `used` |
 | 余额流水 | `tvcmall_list_balance_records` | `direction` 使用 `all`、`income` 或 `expense` |
 
-商品搜索无结果时停止；只有 `total === 1` 且用户需要详情时才继续查询；只要 `total > 1`，即使当前 `items` 只含一项，也必须先让用户按标题或 SKU 确认，绝不自行选详情。
+商品搜索无结果时停止；只有当前 `items` 只有一项且用户需要详情时，才可继续调用 `tvcmall_get_product_detail`；当前 `items` 多项时，必须先让用户按标题或 SKU 确认，不能自行选择。
 
 “最近已发货订单的物流和运费”先调用 `tvcmall_list_orders(status=V3Shipped)`，再把当前结果中的订单号传给 `tvcmall_batch_get_tracking`。
 
@@ -237,7 +237,7 @@ Run:
 npm test -- tests/unit/tvcmall-customer-query-skill.test.ts
 ```
 
-Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品 total、已发货订单物流、对话凭据、认证状态、严格 MCP metadata 结构，以及积分和余额的完整允许方向集合；metadata 契约只允许当前的顶层、嵌套 key 和唯一 MCP dependency，拒绝重复/未知 key、额外嵌套、URL、PAT 或 Bearer 值。积分仅允许 `all`/`got`/`used`，余额仅允许 `all`/`income`/`expense`；对受控内存副本中的 metadata 删除/替换、重复 key、敏感 key、交叉方向或 `got`/`expense` 互换明确失败，且不改写磁盘文件。
+Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品当前 `items` 唯一性、已发货订单物流、对话凭据、认证状态、严格 MCP metadata 结构，以及积分和余额的完整允许方向集合；metadata 契约只允许当前的顶层、嵌套 key 和唯一 MCP dependency。安全断言扫描整个 Skill 目录的组合内容，拒绝重复/未知 key、额外嵌套、URL、Bearer 实值、邮箱/电话/地址 PII，以及与服务器 `^tmcp_v1_[^\s.]+\.[^\s.]+$` 等价的 PAT 实值（包含 `_` 或 `-` 开头 token ID）。积分仅允许 `all`/`got`/`used`，余额仅允许 `all`/`income`/`expense`；对受控内存副本中的 metadata 删除/替换、重复 key、敏感 key、交叉方向或 `got`/`expense` 互换明确失败，且不改写磁盘文件。
 
 ### Task 4: 静态安全、元数据与路由一致性验证
 
@@ -246,7 +246,7 @@ Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品 total�
 - Verify: `.agents/skills/query-tvcmall-customer-data/agents/openai.yaml`
 - Verify: `tests/unit/tvcmall-customer-query-skill.test.ts`
 
-静态契约测试按官方生成器当前固定形态严格解析 `openai.yaml`：仅允许 `interface`/`dependencies` 顶层、interface 的三个字段和唯一工具项的四个字段，并验证 display name、Unicode 短描述长度、默认提示、唯一 `tvcmall` Streamable HTTP MCP dependency、重复/未知 key、额外嵌套及敏感字段缺失；积分与余额方向只在各自 Markdown 路由表行中检查完整允许集合。
+静态契约测试按官方生成器当前固定形态严格解析 `openai.yaml`：仅允许 `interface`/`dependencies` 顶层、interface 的三个字段和唯一工具项的四个字段，并验证 display name、Unicode 短描述长度、默认提示、唯一 `tvcmall` Streamable HTTP MCP dependency、重复/未知 key 和额外嵌套；安全扫描对 `SKILL.md` 与 `openai.yaml` 的组合内容执行，PAT 格式与服务器 `^tmcp_v1_[^\s.]+\.[^\s.]+$` 等价，不接受 URL、凭据实值或邮箱/电话/地址 PII；积分与余额方向只在各自 Markdown 路由表行中检查完整允许集合。
 
 - [ ] **Step 1: 校验全部 tool 名称存在**
 
@@ -290,13 +290,13 @@ Expected: 两组名称均为当前 11 个只读 tools，没有拼写错误或不
 Run:
 
 ```bash
-if rg -n 'tmcp_v1_[A-Za-z0-9]|https?://|Bearer[[:space:]]+[A-Za-z0-9._-]+' \
+if rg -n 'tmcp_v1_[^[:space:].]+\.[^[:space:].]+|https?://|Bearer[[:space:]]+[^[:space:]]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\+?[0-9][0-9 -]{6,}[0-9]|(地址|address)[[:space:]]*[:：][^[:space:]]' \
   .agents/skills/query-tvcmall-customer-data; then
   exit 1
 fi
 ```
 
-Expected: exit `0`；允许出现敏感字段名，但不能出现 PAT 值、Bearer 值或 URL。
+Expected: exit `0`；允许出现敏感字段名，但不能出现 PAT 值、Bearer 值、URL 或邮箱/电话/地址 PII。
 
 - [ ] **Step 4: 重新校验 Skill 元数据**
 

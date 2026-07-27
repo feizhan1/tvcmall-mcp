@@ -30,7 +30,7 @@ description: Use when users ask to search TVCMall products, estimate shipping fo
 | 积分流水 | `tvcmall_list_point_records` | `direction` 使用 `all`、`got` 或 `used` |
 | 余额流水 | `tvcmall_list_balance_records` | `direction` 使用 `all`、`income` 或 `expense` |
 
-商品搜索无结果时停止；只有 `total === 1` 且用户需要详情时才继续查询；只要 `total > 1`，即使当前 `items` 只含一项，也必须先让用户按标题或 SKU 确认，绝不自行选详情。
+商品搜索无结果时停止；只有当前 `items` 只有一项且用户需要详情时，才可继续调用 `tvcmall_get_product_detail`；当前 `items` 多项时，必须先让用户按标题或 SKU 确认，不能自行选择。
 
 “最近已发货订单的物流和运费”先调用 `tvcmall_list_orders(status=V3Shipped)`，再把当前结果中的订单号传给 `tvcmall_batch_get_tracking`。
 
