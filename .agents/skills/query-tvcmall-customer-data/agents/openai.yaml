@@ -1,0 +1,11 @@
+interface:
+  display_name: "TVCMall 客户查询"
+  short_description: "安全查询商品、订单、物流、运费、积分和余额流水"
+  default_prompt: "使用 $query-tvcmall-customer-data 查询我的 TVCMall 订单和物流状态。"
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "tvcmall"
+      description: "由 MCP Client 配置的 TVCMall Customer MCP"
+      transport: "streamable_http"
