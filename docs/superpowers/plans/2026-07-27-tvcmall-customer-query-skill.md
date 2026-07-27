@@ -237,7 +237,7 @@ Run:
 npm test -- tests/unit/tvcmall-customer-query-skill.test.ts
 ```
 
-Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品 total、已发货订单物流、对话凭据、认证状态、MCP metadata，以及积分 `got` 和余额 `expense` 路由；对受控内存副本中的 metadata 删除/替换或 `got`/`expense` 互换明确失败，且不改写磁盘文件。
+Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品 total、已发货订单物流、对话凭据、认证状态、严格 MCP metadata 结构，以及积分和余额的完整允许方向集合；metadata 契约只允许当前的顶层、嵌套 key 和唯一 MCP dependency，拒绝重复/未知 key、额外嵌套、URL、PAT 或 Bearer 值。积分仅允许 `all`/`got`/`used`，余额仅允许 `all`/`income`/`expense`；对受控内存副本中的 metadata 删除/替换、重复 key、敏感 key、交叉方向或 `got`/`expense` 互换明确失败，且不改写磁盘文件。
 
 ### Task 4: 静态安全、元数据与路由一致性验证
 
@@ -246,7 +246,7 @@ Expected: 读取实际 `SKILL.md` 与 `agents/openai.yaml`，覆盖商品 total�
 - Verify: `.agents/skills/query-tvcmall-customer-data/agents/openai.yaml`
 - Verify: `tests/unit/tvcmall-customer-query-skill.test.ts`
 
-静态契约测试验证 `openai.yaml` 的 display name、Unicode 短描述长度、默认提示、唯一 `tvcmall` Streamable HTTP MCP dependency 和敏感字段缺失；积分与余额方向只在各自 Markdown 路由表行中检查。
+静态契约测试按官方生成器当前固定形态严格解析 `openai.yaml`：仅允许 `interface`/`dependencies` 顶层、interface 的三个字段和唯一工具项的四个字段，并验证 display name、Unicode 短描述长度、默认提示、唯一 `tvcmall` Streamable HTTP MCP dependency、重复/未知 key、额外嵌套及敏感字段缺失；积分与余额方向只在各自 Markdown 路由表行中检查完整允许集合。
 
 - [ ] **Step 1: 校验全部 tool 名称存在**
 

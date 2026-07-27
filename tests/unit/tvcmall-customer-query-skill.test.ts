@@ -22,45 +22,136 @@ type OpenAiMetadata = {
   };
 };
 
-const requireInterfaceValue = (source: string, key: string) => {
-  const value = source.match(new RegExp(`^  ${key}: "([^"]*)"$`, 'm'))?.[1];
+type StringMap = Record<string, string>;
 
-  if (value === undefined) {
-    throw new Error(`openai.yaml interface.${key} is required`);
+const INTERFACE_KEYS = ['display_name', 'short_description', 'default_prompt'] as const;
+const DEPENDENCY_KEYS = ['type', 'value', 'description', 'transport'] as const;
+
+const parseQuotedEntry = (entry: string, scope: string) => {
+  const separator = entry.indexOf(': "');
+  const closingQuote = entry.indexOf('"', separator + 3);
+  const key = entry.slice(0, separator);
+
+  if (
+    separator <= 0 ||
+    closingQuote !== entry.length - 1 ||
+    !/^[a-z_]+$/.test(key)
+  ) {
+    throw new Error(`openai.yaml ${scope} must use quoted key-value entries`);
   }
 
-  return value;
+  return { key, value: entry.slice(separator + 3, -1) };
+};
+
+const assignAllowedValue = (
+  values: StringMap,
+  key: string,
+  value: string,
+  allowedKeys: readonly string[],
+  scope: string
+) => {
+  if (!allowedKeys.includes(key)) {
+    if (key === 'url') {
+      throw new Error('openai.yaml must not declare a URL');
+    }
+    throw new Error(`openai.yaml ${scope} contains unknown key "${key}"`);
+  }
+  if (Object.prototype.hasOwnProperty.call(values, key)) {
+    throw new Error(`openai.yaml must not repeat ${scope}.${key}`);
+  }
+
+  values[key] = value;
+};
+
+const requireKeys = (values: StringMap, keys: readonly string[], scope: string) => {
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(values, key)) {
+      throw new Error(`openai.yaml ${scope}.${key} is required`);
+    }
+  }
 };
 
 const parseOpenAiMetadata = (source: string): OpenAiMetadata => {
-  if (/^\s+url:/m.test(source)) {
-    throw new Error('openai.yaml must not declare a URL');
-  }
-  if (/\bPAT\b|\bBearer\s+\S+|\btmcp_v1_[A-Za-z0-9]/i.test(source)) {
-    throw new Error('openai.yaml must not contain a credential value');
+  const lines = source.replace(/\r\n/g, '\n').split('\n');
+  if (lines.at(-1) === '') lines.pop();
+
+  let index = 0;
+  const takeLine = (expected: string, error: string) => {
+    if (lines[index] !== expected) {
+      throw new Error(error);
+    }
+    index += 1;
+  };
+  const readMappingBlock = (
+    indent: string,
+    allowedKeys: readonly string[],
+    scope: string
+  ) => {
+    const values: StringMap = {};
+
+    while (lines[index]?.startsWith(indent) && !lines[index]?.startsWith(`${indent} `)) {
+      const { key, value } = parseQuotedEntry(lines[index].slice(indent.length), scope);
+      assignAllowedValue(values, key, value, allowedKeys, scope);
+      index += 1;
+    }
+
+    requireKeys(values, allowedKeys, scope);
+    return values;
+  };
+
+  takeLine('interface:', 'openai.yaml must start with the interface mapping');
+  const interfaceValues = readMappingBlock('  ', INTERFACE_KEYS, 'interface');
+  takeLine('', 'openai.yaml must separate interface and dependencies with one blank line');
+  takeLine('dependencies:', 'openai.yaml must declare dependencies after interface');
+  takeLine('  tools:', 'openai.yaml dependencies must contain only tools');
+
+  if (!lines[index]?.startsWith('    - ')) {
+    throw new Error('openai.yaml dependencies.tools must contain exactly one item');
   }
 
-  const dependencyEntries = source.match(/^    - type:/gm) ?? [];
-  if (dependencyEntries.length !== 1) {
-    throw new Error('openai.yaml must declare exactly one MCP dependency');
-  }
-
-  const dependency = source.match(
-    /^dependencies:\n  tools:\n    - type: "([^"]*)"\n      value: "([^"]*)"\n      description: "([^"]*)"\n      transport: "([^"]*)"$/m
+  const dependencyValues: StringMap = {};
+  const firstDependency = parseQuotedEntry(
+    lines[index].slice('    - '.length),
+    'dependencies.tools[0]'
   );
-  if (!dependency) {
-    throw new Error('openai.yaml dependency must use the generated MCP field layout');
+  assignAllowedValue(
+    dependencyValues,
+    firstDependency.key,
+    firstDependency.value,
+    DEPENDENCY_KEYS,
+    'dependencies.tools[0]'
+  );
+  index += 1;
+
+  while (lines[index]?.startsWith('      ')) {
+    const entry = parseQuotedEntry(lines[index].slice(6), 'dependencies.tools[0]');
+    assignAllowedValue(
+      dependencyValues,
+      entry.key,
+      entry.value,
+      DEPENDENCY_KEYS,
+      'dependencies.tools[0]'
+    );
+    index += 1;
+  }
+
+  requireKeys(dependencyValues, DEPENDENCY_KEYS, 'dependencies.tools[0]');
+  if (lines[index]?.startsWith('    - ')) {
+    throw new Error('openai.yaml dependencies.tools must contain exactly one item');
+  }
+  if (index !== lines.length) {
+    throw new Error(`openai.yaml contains unsupported structure: "${lines[index]}"`);
   }
 
   return {
-    displayName: requireInterfaceValue(source, 'display_name'),
-    shortDescription: requireInterfaceValue(source, 'short_description'),
-    defaultPrompt: requireInterfaceValue(source, 'default_prompt'),
+    displayName: interfaceValues.display_name,
+    shortDescription: interfaceValues.short_description,
+    defaultPrompt: interfaceValues.default_prompt,
     dependency: {
-      type: dependency[1],
-      value: dependency[2],
-      description: dependency[3],
-      transport: dependency[4]
+      type: dependencyValues.type,
+      value: dependencyValues.value,
+      description: dependencyValues.description,
+      transport: dependencyValues.transport
     }
   };
 };
@@ -73,6 +164,13 @@ const requireEqual = (actual: string, expected: string, error: string) => {
 
 const assertOpenAiMetadataContract = (source: string) => {
   const metadata = parseOpenAiMetadata(source);
+
+  if (/https?:\/\//i.test(source)) {
+    throw new Error('openai.yaml must not declare a URL');
+  }
+  if (/\bPAT\b|\bBearer\s+\S+|\btmcp_v1_[A-Za-z0-9]/i.test(source)) {
+    throw new Error('openai.yaml must not contain a credential value');
+  }
 
   requireEqual(
     metadata.displayName,
@@ -126,16 +224,41 @@ const routeTableRow = (markdown: string, tool: string) => {
   return row;
 };
 
+const routeDirections = (row: string, tool: string) => {
+  const cells = row.split('|').slice(1, -1).map((cell) => cell.trim());
+  const constraint = cells[2];
+  const tokens = Array.from(constraint.matchAll(/`([^`]+)`/g), (match) => match[1]);
+
+  if (cells.length !== 3 || cells[1] !== `\`${tool}\`` || tokens[0] !== 'direction') {
+    throw new Error(`${tool} routing table row must declare direction values`);
+  }
+
+  return tokens.slice(1);
+};
+
+const assertDirectionSet = (tool: string, row: string, allowed: readonly string[]) => {
+  const directions = routeDirections(row, tool);
+
+  for (const direction of allowed) {
+    if (!directions.includes(direction)) {
+      throw new Error(`${tool} route must include direction "${direction}"`);
+    }
+  }
+  const unexpected = directions.find((direction) => !allowed.includes(direction));
+  if (unexpected) {
+    throw new Error(`${tool} route must not include direction "${unexpected}"`);
+  }
+  if (directions.length !== allowed.length) {
+    throw new Error(`${tool} route must list each allowed direction exactly once`);
+  }
+};
+
 const assertAccountRouteContract = (markdown: string) => {
   const pointsRow = routeTableRow(markdown, 'tvcmall_list_point_records');
   const balanceRow = routeTableRow(markdown, 'tvcmall_list_balance_records');
 
-  if (!/`direction`\s*使用[^|]*`got`/.test(pointsRow)) {
-    throw new Error('tvcmall_list_point_records route must include direction "got"');
-  }
-  if (!/`direction`\s*使用[^|]*`expense`/.test(balanceRow)) {
-    throw new Error('tvcmall_list_balance_records route must include direction "expense"');
-  }
+  assertDirectionSet('tvcmall_list_point_records', pointsRow, ['all', 'got', 'used']);
+  assertDirectionSet('tvcmall_list_balance_records', balanceRow, ['all', 'income', 'expense']);
 };
 
 const scenarios = [
@@ -269,6 +392,28 @@ describe('TVCMall Customer Query Skill contract', () => {
     ).toThrow('openai.yaml must not declare a URL');
   });
 
+  it('v2: rejects duplicate interface metadata keys instead of accepting the first value', () => {
+    expect(() =>
+      assertOpenAiMetadataContract(
+        openAiYaml.replace(
+          '  default_prompt: "使用 $query-tvcmall-customer-data 查询我的 TVCMall 订单和物流状态。"\n',
+          '  default_prompt: "使用 $query-tvcmall-customer-data 查询我的 TVCMall 订单和物流状态。"\n  default_prompt: "https://unreviewed.example"\n'
+        )
+      )
+    ).toThrow('openai.yaml must not repeat interface.default_prompt');
+  });
+
+  it('v2: rejects unknown sensitive interface keys', () => {
+    expect(() =>
+      assertOpenAiMetadataContract(
+        openAiYaml.replace(
+          '  default_prompt: "使用 $query-tvcmall-customer-data 查询我的 TVCMall 订单和物流状态。"\n',
+          '  default_prompt: "使用 $query-tvcmall-customer-data 查询我的 TVCMall 订单和物流状态。"\n  api_key: "placeholder"\n'
+        )
+      )
+    ).toThrow('openai.yaml interface contains unknown key "api_key"');
+  });
+
   it('v1: keeps points and balance directions on their own routing table rows', () => {
     expect(() => assertAccountRouteContract(skill)).not.toThrow();
 
@@ -293,5 +438,27 @@ describe('TVCMall Customer Query Skill contract', () => {
         )
       )
     ).toThrow('tvcmall_list_balance_records route must include direction "expense"');
+  });
+
+  it('v2: rejects expense from the points routing table row', () => {
+    expect(() =>
+      assertAccountRouteContract(
+        skill.replace(
+          '`direction` 使用 `all`、`got` 或 `used`',
+          '`direction` 使用 `all`、`got`、`used` 或 `expense`'
+        )
+      )
+    ).toThrow('tvcmall_list_point_records route must not include direction "expense"');
+  });
+
+  it('v2: rejects got from the balance routing table row', () => {
+    expect(() =>
+      assertAccountRouteContract(
+        skill.replace(
+          '`direction` 使用 `all`、`income` 或 `expense`',
+          '`direction` 使用 `all`、`income`、`expense` 或 `got`'
+        )
+      )
+    ).toThrow('tvcmall_list_balance_records route must not include direction "got"');
   });
 });
